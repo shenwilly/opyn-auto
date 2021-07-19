@@ -18,16 +18,22 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   solidity: {
-    compilers: [{ version: "0.7.6", settings: {} }],
+    compilers: [
+      { version: "0.7.6", settings: {} },
+      { version: "0.6.10", settings: {} }
+    ],
   },
   networks: {
     hardhat: {
+      allowUnlimitedContractSize: true
       // forking: {
       //   url: "https://eth-mainnet.alchemyapi.io/v2/[API_KEY]",
       //   blockNumber: 12627210,
       // },
     },
-    localhost: {},
+    localhost: {
+      allowUnlimitedContractSize: true
+    },
     rinkeby: {
       url: `https://rinkeby.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [RINKEBY_PRIVATE_KEY],
