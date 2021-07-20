@@ -24,15 +24,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             "GammaRedeemer::createOrder: Otoken not whitelisted"
         );
 
-        bool isSeller;
-        if (_amount == 0) {
-            require(
-                isValidVault(msg.sender, _vaultId),
-                "GammaRedeemer::createOrder: Vault is not valid"
-            );
-            isSeller = true;
-        }
-
         uint256 orderId = orders.length;
 
         Order memory order;
@@ -40,7 +31,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.otoken = _otoken;
         order.amount = _amount;
         order.vaultId = _vaultId;
-        order.isSeller = isSeller;
+        order.isSeller = _amount == 0;
         orders.push(order);
 
         // create auto task
@@ -72,7 +63,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             bool shouldSettle = shouldSettleVault(order.owner, order.vaultId);
             if (!shouldSettle) return false;
         } else {
-            bool shouldRedeem = shouldRedeemOtoken(order.otoken);
+            bool shouldRedeem = shouldRedeemOtoken(
+                order.owner,
+                order.otoken,
+                order.amount
+            );
             if (!shouldRedeem) return false;
         }
 
