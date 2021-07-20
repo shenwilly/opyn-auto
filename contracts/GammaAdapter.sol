@@ -19,12 +19,13 @@ contract GammaAdapter is IGammaAdapter, Ownable {
         refreshConfig();
     }
 
-    function isWhitelistedOtoken(address _otoken) public view returns (bool) {
+    function isWhitelistedOtoken(address _otoken) public override view returns (bool) {
         return whitelist.isWhitelistedOtoken(_otoken);
     }
 
     function isValidVault(address _owner, uint256 _vaultId)
         public
+        override
         view
         returns (bool)
     {
