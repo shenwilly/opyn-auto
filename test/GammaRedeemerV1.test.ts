@@ -10,15 +10,15 @@ import {
   MarginCalculator,
   MockOracle,
   MockERC20,
-  GammaRedeemer,
   MockERC20__factory,
-  GammaRedeemer__factory,
+  GammaRedeemerV1__factory,
+  GammaRedeemerV1,
 } from "../typechain";
-import { ContractFactory } from "ethers";
 const { time, constants } = require("@openzeppelin/test-helpers");
 import { createValidExpiry } from "./helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
+import { setupGammaContracts } from "./helpers/setup/GammaSetup";
 
 enum ActionType {
   OpenVault,
@@ -50,8 +50,8 @@ describe("GammaRedeemer", () => {
   let marginPool: MarginPool;
   let calculator: MarginCalculator;
   let oracle: MockOracle;
-  let controllerProxy: Controller;
-  let gammaRedeemer: GammaRedeemer;
+  let controller: Controller;
+  let gammaRedeemer: GammaRedeemerV1;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -76,87 +76,19 @@ describe("GammaRedeemer", () => {
     buyerAddress = buyer.address;
     sellerAddress = seller.address;
 
-    // deploy AddressBook
-    const AddressBookFactory: ContractFactory = await ethers.getContractFactory(
-      "AddressBook"
-    );
-    addressBook = (await AddressBookFactory.deploy()) as AddressBook;
-
-    // deploy OtokenFactory & set address
-    const OtokenFactoryFactory: ContractFactory =
-      await ethers.getContractFactory("OtokenFactory");
-    otokenFactory = (await OtokenFactoryFactory.deploy(
-      addressBook.address
-    )) as OtokenFactory;
-    await addressBook.setOtokenFactory(otokenFactory.address);
-
-    // deploy Otoken implementation & set address
-    const OtokenFactory: ContractFactory = await ethers.getContractFactory(
-      "Otoken"
-    );
-    const oTokenImplementation = await OtokenFactory.deploy();
-    await addressBook.setOtokenImpl(oTokenImplementation.address);
-
-    // deploy Whitelist module & set address
-    const WhitelistFactory: ContractFactory = await ethers.getContractFactory(
-      "Whitelist"
-    );
-    whitelist = (await WhitelistFactory.deploy(
-      addressBook.address
-    )) as Whitelist;
-    await addressBook.setWhitelist(whitelist.address);
-
-    // deploy Oracle module & set address
-    const OracleFactory: ContractFactory = await ethers.getContractFactory(
-      "MockOracle"
-    );
-    oracle = (await OracleFactory.deploy()) as MockOracle;
-    await addressBook.setOracle(oracle.address);
-
-    // deploy MarginPool module & set address
-    const MarginPoolFactory: ContractFactory = await ethers.getContractFactory(
-      "MarginPool"
-    );
-    marginPool = (await MarginPoolFactory.deploy(
-      addressBook.address
-    )) as MarginPool;
-    await addressBook.setMarginPool(marginPool.address);
-
-    // deploy MarginCalculator module & set address
-    const MarginCalculatorFactory: ContractFactory =
-      await ethers.getContractFactory("MarginCalculator");
-    calculator = (await MarginCalculatorFactory.deploy(
-      oracle.address
-    )) as MarginCalculator;
-    await addressBook.setMarginCalculator(calculator.address);
-
-    // deploy MarginVault library
-    const MarginVaultFactory: ContractFactory = await ethers.getContractFactory(
-      "MarginVault"
-    );
-    const marginVault = await MarginVaultFactory.deploy();
-
-    // deploy Controller & set address
-    const ControllerFactory: ContractFactory = await ethers.getContractFactory(
-      "Controller",
-      {
-        libraries: {
-          MarginVault: marginVault.address,
-        },
-      }
-    );
-    const controller = (await ControllerFactory.deploy()) as Controller;
-    await addressBook.setController(controller.address);
-
-    let controllerAddress = await addressBook.getController();
-    controllerProxy = (await ethers.getContractAt(
-      "Controller",
-      controllerAddress
-    )) as Controller;
+    [
+      addressBook,
+      otokenFactory,
+      whitelist,
+      oracle,
+      marginPool,
+      calculator,
+      controller,
+    ] = await setupGammaContracts();
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 30);
-
+    
     // setup usdc and weth
     const mockERC20Factory = (await ethers.getContractFactory(
       "MockERC20"
@@ -202,45 +134,11 @@ describe("GammaRedeemer", () => {
     );
     vaultCounter = vaultCounterBefore.toNumber() + 1;
 
-    //deploy Uniswap V2
-    // const UniswapV2Factory = await ethers.getContractFactory(
-    //   [
-    //     "constructor(address _feeToSetter)",
-    //     "function createPair(address tokenA, address tokenB) external returns (address pair)",
-    //   ],
-    //   UniswapV2FactoryBytecode
-    // );
-    // const uniswapV2Factory = (await UniswapV2Factory.deploy(sellerAddress)) as  UniswapV2Factory;
-    // uniswapV2Factory.createPair(usdc.address, weth.address)
-
-    // const UniswapRouterFactory = (await ethers.getContractFactory('UniswapV2Router02')) as UniswapV2Router02__factory
-    // const uniswapRouter = (await UniswapRouterFactory.deploy(uniswapV2Factory.address, weth.address)) as UniswapV2Router02
-
-    // const liquidityAmountUsdc = createTokenAmount(100, usdcDecimals)
-    // const liquidityAmountWeth = createTokenAmount(100, wethDecimals)
-    // const liquidityAmountMin = createTokenAmount(10, wethDecimals)
-
-    // usdc.connect(deployer);
-    // await usdc.mint(deployerAddress, liquidityAmountUsdc)
-    // weth.connect(deployer);
-    // await weth.mint(deployerAddress, liquidityAmountWeth)
-
-    // await uniswapRouter.addLiquidity(
-    //   weth.address,
-    //   usdc.address,
-    //   liquidityAmountUsdc,
-    //   liquidityAmountWeth,
-    //   liquidityAmountMin,
-    //   liquidityAmountMin,
-    //   deployerAddress,
-    //   100
-    // )
-
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
-      "GammaRedeemer",
+      "GammaRedeemerV1",
       buyer
-    )) as GammaRedeemer__factory;
+    )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(addressBook.address);
   });
 
@@ -253,7 +151,8 @@ describe("GammaRedeemer", () => {
       collateralAmount.toString(),
       usdcDecimals
     );
-    const expirySpotPrice = 100;
+    const expiryITMSpotPrice = 100;
+    const expiryOTMSpotPrice = 500;
 
     beforeEach("Open a short put option", async () => {
       const actionArgs = [
@@ -289,8 +188,10 @@ describe("GammaRedeemer", () => {
         },
       ];
 
-      await controllerProxy.connect(seller).operate(actionArgs);
+      await controller.connect(seller).operate(actionArgs);
       await ethPut.connect(seller).transfer(buyerAddress, scaledOptionsAmount);
+
+      vaultCounter++;
     });
 
     it("Redeem", async () => {
@@ -299,20 +200,19 @@ describe("GammaRedeemer", () => {
         .approve(gammaRedeemer.address, scaledOptionsAmount);
       const tx = await gammaRedeemer
         .connect(buyer)
-        .createAutoRedeemOrder(ethPut.address, scaledOptionsAmount);
+        .createOrder(ethPut.address, scaledOptionsAmount, 0);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
-        (event) => event.event == "AutoRedeemOrderCreated"
+        (event) => event.event == "OrderCreated"
       )[0];
       const orderId = event.args![0];
-      console.log(orderId.toString(), "!?");
 
       if ((await time.latest()) < expiry) {
         await time.increaseTo(expiry + 2);
       }
 
       const scaledETHPrice = parseUnits(
-        expirySpotPrice.toString(),
+        expiryITMSpotPrice.toString(),
         strikePriceDecimals
       );
       const scaledUSDCPrice = parseUnits("1", strikePriceDecimals);
@@ -329,9 +229,48 @@ describe("GammaRedeemer", () => {
         true
       );
 
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.true;
       console.log((await usdc.balanceOf(buyerAddress)).toString(), "start");
-      await gammaRedeemer.redeem(orderId);
+      await gammaRedeemer.processOrder(orderId);
       console.log((await usdc.balanceOf(buyerAddress)).toString(), "finish");
     });
+
+    // it("Should not redeem", async () => {
+    //   await ethPut
+    //     .connect(buyer)
+    //     .approve(gammaRedeemer.address, scaledOptionsAmount);
+    //   const tx = await gammaRedeemer
+    //     .connect(buyer)
+    //     .createOrder(ethPut.address, scaledOptionsAmount, 0);
+    //   const receipt = await tx.wait();
+    //   const event = receipt.events!.filter(
+    //     (event) => event.event == "OrderCreated"
+    //   )[0];
+    //   const orderId = event.args![0];
+
+    //   if ((await time.latest()) < expiry) {
+    //     await time.increaseTo(expiry + 2);
+    //   }
+
+    //   const scaledETHPrice = parseUnits(
+    //     expiryOTMSpotPrice.toString(),
+    //     strikePriceDecimals
+    //   );
+    //   const scaledUSDCPrice = parseUnits("1", strikePriceDecimals);
+    //   await oracle.setExpiryPriceFinalizedAllPeiodOver(
+    //     weth.address,
+    //     expiry,
+    //     scaledETHPrice,
+    //     true
+    //   );
+    //   await oracle.setExpiryPriceFinalizedAllPeiodOver(
+    //     usdc.address,
+    //     expiry,
+    //     scaledUSDCPrice,
+    //     true
+    //   );
+
+    //   expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.false;
+    // });
   });
 });
