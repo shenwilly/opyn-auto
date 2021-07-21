@@ -14,14 +14,14 @@ import {
   GammaOperatorWrapper,
   MockERC20__factory,
 } from "../../typechain";
-const { time, constants } = require("@openzeppelin/test-helpers");
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
-import { ActionType, Vault } from "../helpers/types/GammaTypes";
+import { ActionType } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
+const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
 const ZERO_ADDR = constants.ZERO_ADDRESS;
 
 describe("GammaRedeemer", () => {
@@ -274,7 +274,58 @@ describe("GammaRedeemer", () => {
   });
 
   describe("getVaultOtoken()", async () => {
-    it("Redeem", async () => {});
+    it("should revert if there is no long/short otokens in vault", async () => {
+      const vault = {
+        shortOtokens: [],
+        longOtokens: [],
+        collateralAssets: [],
+        shortAmounts: [],
+        longAmounts: [],
+        collateralAmounts: [],
+      };
+
+      await expectRevert(
+        gammaOperator.getVaultOtoken(vault),
+        "reverted with panic code 0x1 (Assertion error)"
+      );
+    });
+    it("should return correct otoken", async () => {
+      const shortVault = {
+        shortOtokens: [weth.address], // any address
+        longOtokens: [],
+        collateralAssets: [],
+        shortAmounts: [],
+        longAmounts: [],
+        collateralAmounts: [],
+      };
+      expect(await gammaOperator.getVaultOtoken(shortVault)).to.be.eq(
+        weth.address
+      );
+
+      const longVault = {
+        shortOtokens: [],
+        longOtokens: [usdc.address], // any address
+        collateralAssets: [],
+        shortAmounts: [],
+        longAmounts: [],
+        collateralAmounts: [],
+      };
+      expect(await gammaOperator.getVaultOtoken(longVault)).to.be.eq(
+        usdc.address
+      );
+
+      const longShortVault = {
+        shortOtokens: [weth.address], // any address
+        longOtokens: [usdc.address], // any address
+        collateralAssets: [],
+        shortAmounts: [],
+        longAmounts: [],
+        collateralAmounts: [],
+      };
+      expect(await gammaOperator.getVaultOtoken(longShortVault)).to.be.eq(
+        weth.address
+      );
+    });
   });
 
   describe("getExcessCollateral()", async () => {
