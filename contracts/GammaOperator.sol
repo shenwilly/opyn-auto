@@ -171,8 +171,8 @@ contract GammaOperator is Ownable {
         pure
         returns (address)
     {
-        bool hasShort = _isNotEmpty(_vault.shortOtokens);
-        bool hasLong = _isNotEmpty(_vault.longOtokens);
+        bool hasShort = isNotEmpty(_vault.shortOtokens);
+        bool hasLong = isNotEmpty(_vault.longOtokens);
 
         assert(hasShort || hasLong);
 
@@ -211,7 +211,7 @@ contract GammaOperator is Ownable {
         return ((_vaultId > 0) && (_vaultId <= vaultCounter));
     }
 
-    function _isNotEmpty(address[] memory _array) private pure returns (bool) {
+    function isNotEmpty(address[] memory _array) private pure returns (bool) {
         return (_array.length > 0) && (_array[0] != address(0));
     }
 

@@ -1,6 +1,15 @@
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { ContractFactory } from "ethers/lib/ethers";
 import { ethers } from "hardhat";
-import { AddressBook, Whitelist, MarginPool, MarginCalculator, Controller, OtokenFactory, MockOracle } from "../../../typechain";
+import {
+  AddressBook,
+  Whitelist,
+  MarginPool,
+  MarginCalculator,
+  Controller,
+  OtokenFactory,
+  MockOracle,
+} from "../../../typechain";
 
 type GammaContracts = [
   AddressBook,
@@ -10,18 +19,23 @@ type GammaContracts = [
   MarginPool,
   MarginCalculator,
   Controller
-]
+];
 
-export const setupGammaContracts = async (): Promise<GammaContracts> => {
+export const setupGammaContracts = async (
+  signer?: SignerWithAddress
+): Promise<GammaContracts> => {
   // deploy AddressBook
   const AddressBookFactory: ContractFactory = await ethers.getContractFactory(
-    "AddressBook"
+    "AddressBook",
+    signer
   );
   const addressBook = (await AddressBookFactory.deploy()) as AddressBook;
 
   // deploy OtokenFactory & set address
-  const OtokenFactoryFactory: ContractFactory =
-    await ethers.getContractFactory("OtokenFactory");
+  const OtokenFactoryFactory: ContractFactory = await ethers.getContractFactory(
+    "OtokenFactory",
+    signer
+  );
   const otokenFactory = (await OtokenFactoryFactory.deploy(
     addressBook.address
   )) as OtokenFactory;
@@ -29,14 +43,16 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
 
   // deploy Otoken implementation & set address
   const OtokenFactory: ContractFactory = await ethers.getContractFactory(
-    "Otoken"
+    "Otoken",
+    signer
   );
   const oTokenImplementation = await OtokenFactory.deploy();
   await addressBook.setOtokenImpl(oTokenImplementation.address);
 
   // deploy Whitelist module & set address
   const WhitelistFactory: ContractFactory = await ethers.getContractFactory(
-    "Whitelist"
+    "Whitelist",
+    signer
   );
   const whitelist = (await WhitelistFactory.deploy(
     addressBook.address
@@ -45,14 +61,16 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
 
   // deploy Oracle module & set address
   const OracleFactory: ContractFactory = await ethers.getContractFactory(
-    "MockOracle"
+    "MockOracle",
+    signer
   );
   const oracle = (await OracleFactory.deploy()) as MockOracle;
   await addressBook.setOracle(oracle.address);
 
   // deploy MarginPool module & set address
   const MarginPoolFactory: ContractFactory = await ethers.getContractFactory(
-    "MarginPool"
+    "MarginPool",
+    signer
   );
   const marginPool = (await MarginPoolFactory.deploy(
     addressBook.address
@@ -61,7 +79,7 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
 
   // deploy MarginCalculator module & set address
   const MarginCalculatorFactory: ContractFactory =
-    await ethers.getContractFactory("MarginCalculator");
+    await ethers.getContractFactory("MarginCalculator", signer);
   const calculator = (await MarginCalculatorFactory.deploy(
     oracle.address
   )) as MarginCalculator;
@@ -69,7 +87,8 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
 
   // deploy MarginVault library
   const MarginVaultFactory: ContractFactory = await ethers.getContractFactory(
-    "gamma-protocol/contracts/libs/MarginVault.sol:MarginVault"
+    "gamma-protocol/contracts/libs/MarginVault.sol:MarginVault",
+    signer
   );
   const marginVault = await MarginVaultFactory.deploy();
 
@@ -80,6 +99,7 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
       libraries: {
         MarginVault: marginVault.address,
       },
+      signer: signer,
     }
   );
   const controller = (await ControllerFactory.deploy()) as Controller;
@@ -99,5 +119,5 @@ export const setupGammaContracts = async (): Promise<GammaContracts> => {
     marginPool,
     calculator,
     controllerProxy,
-  ]
-}
+  ];
+};
