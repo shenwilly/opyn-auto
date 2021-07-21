@@ -188,32 +188,6 @@ describe("GammaRedeemer", () => {
     });
   });
 
-  describe("setAddressBook()", async () => {
-    it("should revert if sender is not owner", async () => {
-      await expectRevert(
-        gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-        "Ownable: caller is not the owner'"
-      );
-    });
-    it("should revert if new address is zero", async () => {
-      await expectRevert(
-        gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-        "GammaOperator::setAddressBook: Address must not be zero"
-      );
-    });
-    it("should set new addressBook", async () => {
-      const oldAddressBook = await gammaOperator.addressBook();
-      const newAddressBook = buyerAddress;
-      expect(oldAddressBook).to.not.be.eq(newAddressBook);
-      await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-      expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    });
-  });
-
-  describe("refreshConfig()", async () => {
-    it("Redeem", async () => {});
-  });
-
   describe("getRedeemPayout()", async () => {
     it("Redeem", async () => {});
   });
@@ -515,6 +489,52 @@ describe("GammaRedeemer", () => {
       ];
       await controller.connect(buyer).operate(actionArgs);
       expect(await gammaOperator.isValidVaultId(buyerAddress, 1)).to.be.true;
+    });
+  });
+
+  describe("setAddressBook()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if new address is zero", async () => {
+      await expectRevert(
+        gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+        "GammaOperator::setAddressBook: Address must not be zero"
+      );
+    });
+    it("should set new addressBook", async () => {
+      const oldAddressBook = await gammaOperator.addressBook();
+      const newAddressBook = buyerAddress;
+      expect(oldAddressBook).to.not.be.eq(newAddressBook);
+      await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+      expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    });
+  });
+
+  describe("refreshConfig()", async () => {
+    it("should refresh config", async () => {
+      await gammaOperator.connect(deployer).setAddressBook(addressBook.address);
+      const oldController = await gammaOperator.controller();
+      const oldWhitelist = await gammaOperator.whitelist();
+      const oldCalculator = await gammaOperator.calculator();
+
+      const [newAddressBook, , newWhitelist, , , newCalculator, newController] =
+        await setupGammaContracts(deployer);
+      expect(oldController).to.not.be.eq(newController.address);
+      expect(oldWhitelist).to.not.be.eq(newWhitelist.address);
+      expect(oldCalculator).to.not.be.eq(newCalculator.address);
+
+      await gammaOperator
+        .connect(deployer)
+        .setAddressBook(newAddressBook.address);
+      await gammaOperator.refreshConfig();
+
+      expect(await gammaOperator.controller()).to.be.eq(newController.address);
+      expect(await gammaOperator.whitelist()).to.be.eq(newWhitelist.address);
+      expect(await gammaOperator.calculator()).to.be.eq(newCalculator.address);
     });
   });
 });
