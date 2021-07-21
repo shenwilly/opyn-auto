@@ -10,17 +10,15 @@ import {
   MarginCalculator,
   MockOracle,
   MockERC20,
-  MockERC20__factory,
-  GammaRedeemerV1__factory,
-  GammaRedeemerV1,
   GammaOperatorWrapper__factory,
   GammaOperatorWrapper,
+  MockERC20__factory,
 } from "../../typechain";
 const { time, constants } = require("@openzeppelin/test-helpers");
-import { createValidExpiry } from "../helpers/utils";
+import { createValidExpiry, DAY } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
-import { setupGammaContracts } from "../helpers/setup/GammaSetup";
+import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
@@ -43,15 +41,15 @@ describe("GammaRedeemer", () => {
   let controller: Controller;
   let gammaOperator: GammaOperatorWrapper;
 
-  let expiry: number;
+  // let expiry: number;
   let usdc: MockERC20;
   let weth: MockERC20;
 
-  let ethPut: Otoken;
+  // let ethPut: Otoken;
 
-  const strikePrice = 300;
-  const optionsAmount = 10;
-  const collateralAmount = optionsAmount * strikePrice;
+  // const strikePrice = 300;
+  // const optionsAmount = 10;
+  // const collateralAmount = optionsAmount * strikePrice;
 
   let vaultCounter: number;
 
@@ -83,6 +81,19 @@ describe("GammaRedeemer", () => {
     gammaOperator = await GammaOperatorWrapperFactory.deploy(
       addressBook.address
     );
+
+    // setup usdc and weth
+    const mockERC20Factory = (await ethers.getContractFactory(
+      "MockERC20"
+    )) as MockERC20__factory;
+    usdc = await mockERC20Factory.deploy("USDC", "USDC", usdcDecimals);
+    weth = await mockERC20Factory.deploy("WETH", "WETH", wethDecimals);
+
+    // setup whitelist
+    await whitelist.whitelistCollateral(usdc.address);
+    await whitelist.whitelistCollateral(weth.address);
+    whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
+    whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
   });
 
   describe("redeemOtoken()", async () => {
@@ -102,7 +113,74 @@ describe("GammaRedeemer", () => {
   });
 
   describe("hasExpiredAndSettlementAllowed()", async () => {
-    it("Redeem", async () => {});
+    let ethPut: Otoken;
+    let expiry: number;
+    let strikePrice = 100;
+
+    beforeEach(async () => {
+      const now = (await time.latest()).toNumber();
+      expiry = createValidExpiry(now, 7);
+
+      ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+    });
+
+    it("should return correct value after expiry", async () => {
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        strikePrice,
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        1,
+        true
+      );
+
+      expect(await gammaOperator.hasExpiredAndSettlementAllowed(ethPut.address))
+        .to.be.false;
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry - 1]);
+      await ethers.provider.send("evm_mine", []);
+      expect(await gammaOperator.hasExpiredAndSettlementAllowed(ethPut.address))
+        .to.be.false;
+
+      await ethers.provider.send("evm_mine", []);
+      expect(await gammaOperator.hasExpiredAndSettlementAllowed(ethPut.address))
+        .to.be.true;
+    });
+
+    it("should return correct value after settled", async () => {
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+      expect(await gammaOperator.hasExpiredAndSettlementAllowed(ethPut.address))
+        .to.be.false;
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        strikePrice,
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        1,
+        true
+      );
+
+      expect(await gammaOperator.hasExpiredAndSettlementAllowed(ethPut.address))
+        .to.be.true;
+    });
   });
 
   describe("setAddressBook()", async () => {
@@ -134,7 +212,53 @@ describe("GammaRedeemer", () => {
   });
 
   describe("isSettlementAllowed()", async () => {
-    it("Redeem", async () => {});
+    it("should return same value as Gamma controller", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 7);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("100", strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const allowedGammaBefore = await controller.isSettlementAllowed(
+        ethPut.address
+      );
+      const allowedControllerBefore = await gammaOperator.isSettlementAllowed(
+        ethPut.address
+      );
+      expect(allowedGammaBefore).to.be.false;
+      expect(allowedGammaBefore).to.be.eq(allowedControllerBefore);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        100,
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        1,
+        true
+      );
+
+      const allowedGammaAfter = await controller.isSettlementAllowed(
+        ethPut.address
+      );
+      const allowedControllerAfter = await gammaOperator.isSettlementAllowed(
+        ethPut.address
+      );
+      expect(allowedGammaAfter).to.be.true;
+      expect(allowedGammaAfter).to.be.eq(allowedControllerAfter);
+    });
   });
 
   describe("isOperator()", async () => {

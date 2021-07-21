@@ -1,5 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { ContractFactory } from "ethers/lib/ethers";
+import { BigNumber, BigNumberish, ContractFactory } from "ethers/lib/ethers";
+import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   AddressBook,
@@ -9,6 +10,7 @@ import {
   Controller,
   OtokenFactory,
   MockOracle,
+  Otoken,
 } from "../../../typechain";
 
 type GammaContracts = [
@@ -120,4 +122,34 @@ export const setupGammaContracts = async (
     calculator,
     controllerProxy,
   ];
+};
+
+export const createOtoken = async (
+  factory: OtokenFactory,
+  underlying: string,
+  strike: string,
+  collateral: string,
+  strikePrice: BigNumber,
+  expiry: BigNumberish,
+  isPut: boolean
+): Promise<Otoken> => {
+  await factory.createOtoken(
+    underlying,
+    strike,
+    collateral,
+    strikePrice,
+    expiry,
+    isPut
+  );
+  const ethPutAddress = await factory.getOtoken(
+    underlying,
+    strike,
+    collateral,
+    strikePrice,
+    expiry,
+    isPut
+  );
+
+  const put = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
+  return put;
 };
