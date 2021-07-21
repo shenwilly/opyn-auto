@@ -208,7 +208,41 @@ describe("GammaRedeemer", () => {
   });
 
   describe("getExcessCollateral()", async () => {
-    it("Redeem", async () => {});
+    it("should return the same value as Gamma calculator", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 1);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("100", strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const vault = {
+        shortOtokens: [ethPut.address],
+        longOtokens: [],
+        collateralAssets: [usdc.address],
+        shortAmounts: [1],
+        longAmounts: [],
+        collateralAmounts: [200],
+      };
+
+      const [excessOperator, isExcessOperator] =
+        await gammaOperator.getExcessCollateral(vault, 0);
+      const [excessGamma, isExcessGamma] = await calculator.getExcessCollateral(
+        vault,
+        0
+      );
+
+      expect(excessOperator).to.be.eq(excessGamma);
+      expect(isExcessOperator).to.be.eq(isExcessGamma);
+
+      // TODO: More cases
+    });
   });
 
   describe("isSettlementAllowed()", async () => {
