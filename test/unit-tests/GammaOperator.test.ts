@@ -211,7 +211,7 @@ describe("GammaRedeemer", () => {
   });
 
   describe("isSettlementAllowed()", async () => {
-    it("should return same value as Gamma controller", async () => {
+    it("should return the same value as Gamma controller", async () => {
       const now = (await time.latest()).toNumber();
       const expiry = createValidExpiry(now, 7);
 
@@ -228,11 +228,11 @@ describe("GammaRedeemer", () => {
       const allowedGammaBefore = await controller.isSettlementAllowed(
         ethPut.address
       );
-      const allowedControllerBefore = await gammaOperator.isSettlementAllowed(
+      const allowedOperatorBefore = await gammaOperator.isSettlementAllowed(
         ethPut.address
       );
       expect(allowedGammaBefore).to.be.false;
-      expect(allowedGammaBefore).to.be.eq(allowedControllerBefore);
+      expect(allowedGammaBefore).to.be.eq(allowedOperatorBefore);
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
@@ -252,16 +252,39 @@ describe("GammaRedeemer", () => {
       const allowedGammaAfter = await controller.isSettlementAllowed(
         ethPut.address
       );
-      const allowedControllerAfter = await gammaOperator.isSettlementAllowed(
+      const allowedOperatorAfter = await gammaOperator.isSettlementAllowed(
         ethPut.address
       );
       expect(allowedGammaAfter).to.be.true;
-      expect(allowedGammaAfter).to.be.eq(allowedControllerAfter);
+      expect(allowedGammaAfter).to.be.eq(allowedOperatorAfter);
     });
   });
 
-  describe("isOperator()", async () => {
-    it("Redeem", async () => {});
+  describe("isOperatorOf()", async () => {
+    it("should return the same value as Gamma controller", async () => {
+      await controller.connect(buyer).setOperator(gammaOperator.address, true);
+      const isOperatorGammaBefore = await controller.isOperator(
+        buyerAddress,
+        gammaOperator.address
+      );
+      const isOperatorOperatorBefore = await gammaOperator.isOperatorOf(
+        buyerAddress
+      );
+      expect(isOperatorGammaBefore).to.be.true;
+      expect(isOperatorOperatorBefore).to.be.eq(isOperatorOperatorBefore);
+
+      await controller.connect(buyer).setOperator(gammaOperator.address, false);
+
+      const isOperatorGammaAfter = await controller.isOperator(
+        buyerAddress,
+        gammaOperator.address
+      );
+      const isOperatorOperatorAfter = await gammaOperator.isOperatorOf(
+        buyerAddress
+      );
+      expect(isOperatorGammaAfter).to.be.false;
+      expect(isOperatorGammaAfter).to.be.eq(isOperatorOperatorAfter);
+    });
   });
 
   describe("isWhitelistedOtoken()", async () => {

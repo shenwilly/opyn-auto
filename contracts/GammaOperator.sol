@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
+import "hardhat/console.sol";
 import {IAddressBook} from "./interfaces/IAddressBook.sol";
 import {IGammaController} from "./interfaces/IGammaController.sol";
 import {IWhitelist} from "./interfaces/IWhitelist.sol";
@@ -78,10 +79,8 @@ contract GammaOperator is Ownable {
         view
         returns (bool)
     {
-        if (
-            !isValidVaultId(_owner, _vaultId) ||
-            !isOperator(_owner, address(this))
-        ) return false;
+        if (!isValidVaultId(_owner, _vaultId) || !isOperatorOf(_owner))
+            return false;
 
         (
             MarginVault.Vault memory vault,
@@ -113,7 +112,6 @@ contract GammaOperator is Ownable {
         if (!hasExpired) return false;
 
         bool isAllowed = isSettlementAllowed(_otoken);
-        (_otoken);
         if (!isAllowed) return false;
 
         return true;
@@ -190,12 +188,8 @@ contract GammaOperator is Ownable {
         return controller.isSettlementAllowed(_otoken);
     }
 
-    function isOperator(address _owner, address _operator)
-        public
-        view
-        returns (bool)
-    {
-        return controller.isOperator(_owner, _operator);
+    function isOperatorOf(address _owner) public view returns (bool) {
+        return controller.isOperator(_owner, address(this));
     }
 
     function isWhitelistedOtoken(address _otoken) public view returns (bool) {
