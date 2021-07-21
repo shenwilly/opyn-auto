@@ -118,7 +118,10 @@ contract GammaOperator is Ownable {
     }
 
     function setAddressBook(address _address) public onlyOwner {
-        require(_address != address(0));
+        require(
+            _address != address(0),
+            "GammaOperator::setAddressBook: Address must not be zero"
+        );
         addressBook = IAddressBook(_address);
     }
 

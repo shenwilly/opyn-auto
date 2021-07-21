@@ -189,7 +189,25 @@ describe("GammaRedeemer", () => {
   });
 
   describe("setAddressBook()", async () => {
-    it("Redeem", async () => {});
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if new address is zero", async () => {
+      await expectRevert(
+        gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+        "GammaOperator::setAddressBook: Address must not be zero"
+      );
+    });
+    it("should set new addressBook", async () => {
+      const oldAddressBook = await gammaOperator.addressBook();
+      const newAddressBook = buyerAddress;
+      expect(oldAddressBook).to.not.be.eq(newAddressBook);
+      await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+      expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    });
   });
 
   describe("refreshConfig()", async () => {
