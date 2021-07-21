@@ -288,7 +288,33 @@ describe("GammaRedeemer", () => {
   });
 
   describe("isWhitelistedOtoken()", async () => {
-    it("Redeem", async () => {});
+    it("should return the same value as Gamma controller", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 7);
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("100", strikePriceDecimals),
+        expiry,
+        true
+      );
+      
+      const isWhitelistedGammaBefore = await whitelist.isWhitelistedOtoken(deployerAddress);
+      const isWhitelistedOperatorBefore = await gammaOperator.isWhitelistedOtoken(
+        deployerAddress
+      );
+      expect(isWhitelistedGammaBefore).to.be.false;
+      expect(isWhitelistedGammaBefore).to.be.eq(isWhitelistedOperatorBefore);
+
+      const isWhitelistedGammaAfter = await whitelist.isWhitelistedOtoken(ethPut.address);
+      const isWhitelistedOperatorAfter = await gammaOperator.isWhitelistedOtoken(
+        ethPut.address
+      );
+      expect(isWhitelistedGammaAfter).to.be.true;
+      expect(isWhitelistedGammaAfter).to.be.eq(isWhitelistedOperatorAfter);
+    });
   });
 
   describe("isValidVaultId()", async () => {
