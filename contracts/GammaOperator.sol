@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import {IGammaAdapter} from "./interfaces/IGammaAdapter.sol";
+import {IAddressBook} from "./interfaces/IAddressBook.sol";
+import {IGammaController} from "./interfaces/IGammaController.sol";
+import {IWhitelist} from "./interfaces/IWhitelist.sol";
+import {IMarginCalculator} from "./interfaces/IMarginCalculator.sol";
+import {Actions} from "./external/OpynActions.sol";
 import {MarginVault} from "./external/OpynVault.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -11,10 +15,14 @@ import {IOtoken} from "./interfaces/IOtoken.sol";
 contract GammaOperator is Ownable {
     using SafeERC20 for IERC20;
 
-    IGammaAdapter gamma;
+    IAddressBook public addressBook;
+    IGammaController public controller;
+    IWhitelist public whitelist;
+    IMarginCalculator public calculator;
 
-    constructor(address _gamma) {
-        gamma = IGammaAdapter(_gamma);
+    constructor(address _addressBook) {
+        setAddressBook(_addressBook);
+        refreshConfig();
     }
 
     function redeemOtoken(
@@ -26,23 +34,29 @@ contract GammaOperator is Ownable {
 
         IERC20(_otoken).safeTransferFrom(_owner, address(this), actualAmount);
 
-        gamma.redeem(_otoken, actualAmount, _owner);
+        Actions.ActionArgs memory action;
+        action.actionType = Actions.ActionType.Redeem;
+        action.secondAddress = _owner;
+        action.asset = _otoken;
+        action.amount = _amount;
+
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = action;
+
+        controller.operate(actions);
     }
 
     function settleVault(address _owner, uint256 _vaultId) internal {
-        gamma.settleVault(_owner, _vaultId);
-    }
+        Actions.ActionArgs memory action;
+        action.actionType = Actions.ActionType.SettleVault;
+        action.owner = _owner;
+        action.vaultId = _vaultId;
+        action.secondAddress = _owner;
 
-    function isWhitelistedOtoken(address _otoken) public view returns (bool) {
-        return gamma.isWhitelistedOtoken(_otoken);
-    }
+        Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
+        actions[0] = action;
 
-    function isValidVaultId(address _owner, uint256 _vaultId)
-        public
-        view
-        returns (bool)
-    {
-        return gamma.isValidVaultId(_owner, _vaultId);
+        controller.operate(actions);
     }
 
     function shouldRedeemOtoken(
@@ -53,7 +67,7 @@ contract GammaOperator is Ownable {
         if (!hasExpiredAndSettlementAllowed(_otoken)) return false;
 
         uint256 actualAmount = getRedeemableAmount(_owner, _otoken, _amount);
-        uint256 payout = gamma.getRedeemPayout(_otoken, actualAmount);
+        uint256 payout = getRedeemPayout(_otoken, actualAmount);
         if (payout == 0) return false;
 
         return true;
@@ -64,16 +78,21 @@ contract GammaOperator is Ownable {
         view
         returns (bool)
     {
-        if (!isValidVaultId(_owner, _vaultId) || !isOperatorOf(_owner))
-            return false;
+        if (
+            !isValidVaultId(_owner, _vaultId) ||
+            !isOperator(_owner, address(this))
+        ) return false;
 
-        (MarginVault.Vault memory vault, uint256 typeVault, ) = gamma
-            .getVaultWithDetails(_owner, _vaultId);
+        (
+            MarginVault.Vault memory vault,
+            uint256 typeVault,
 
-        try gamma.getVaultOtoken(vault) returns (address otoken) {
+        ) = getVaultWithDetails(_owner, _vaultId);
+
+        try this.getVaultOtoken(vault) returns (address otoken) {
             if (!hasExpiredAndSettlementAllowed(otoken)) return false;
 
-            (uint256 payout, bool isValidVault) = gamma.getExcessCollateral(
+            (uint256 payout, bool isValidVault) = getExcessCollateral(
                 vault,
                 typeVault
             );
@@ -85,10 +104,6 @@ contract GammaOperator is Ownable {
         return true;
     }
 
-    function isOperatorOf(address _owner) public view returns (bool) {
-        return gamma.isOperator(_owner, address(this));
-    }
-
     function hasExpiredAndSettlementAllowed(address _otoken)
         public
         view
@@ -97,15 +112,35 @@ contract GammaOperator is Ownable {
         bool hasExpired = block.timestamp >= IOtoken(_otoken).expiryTimestamp();
         if (!hasExpired) return false;
 
-        bool isAllowed = gamma.isSettlementAllowed(_otoken);
+        bool isAllowed = isSettlementAllowed(_otoken);
         (_otoken);
         if (!isAllowed) return false;
 
         return true;
     }
 
-    function setGammaAdapter(address _gamma) public onlyOwner {
-        gamma = IGammaAdapter(_gamma);
+    function setAddressBook(address _address) public onlyOwner {
+        require(_address != address(0));
+        addressBook = IAddressBook(_address);
+    }
+
+    function refreshConfig() public {
+        address _controller = addressBook.getController();
+        controller = IGammaController(_controller);
+
+        address _whitelist = addressBook.getWhitelist();
+        whitelist = IWhitelist(_whitelist);
+
+        address _calculator = addressBook.getMarginCalculator();
+        calculator = IMarginCalculator(_calculator);
+    }
+
+    function getRedeemPayout(address _otoken, uint256 _amount)
+        public
+        view
+        returns (uint256)
+    {
+        return controller.getPayout(_otoken, _amount);
     }
 
     function getRedeemableAmount(
@@ -117,6 +152,67 @@ contract GammaOperator is Ownable {
         uint256 allowance = IERC20(_otoken).allowance(_owner, address(this));
         uint256 spendable = min(ownerBalance, allowance);
         return min(_amount, spendable);
+    }
+
+    function getVaultWithDetails(address _owner, uint256 _vaultId)
+        public
+        view
+        returns (
+            MarginVault.Vault memory,
+            uint256,
+            uint256
+        )
+    {
+        return controller.getVaultWithDetails(_owner, _vaultId);
+    }
+
+    function getVaultOtoken(MarginVault.Vault memory _vault)
+        public
+        pure
+        returns (address)
+    {
+        bool hasShort = _isNotEmpty(_vault.shortOtokens);
+        bool hasLong = _isNotEmpty(_vault.longOtokens);
+
+        assert(hasShort || hasLong);
+
+        return hasShort ? _vault.shortOtokens[0] : _vault.longOtokens[0];
+    }
+
+    function getExcessCollateral(
+        MarginVault.Vault memory _vault,
+        uint256 _typeVault
+    ) public view returns (uint256, bool) {
+        return calculator.getExcessCollateral(_vault, _typeVault);
+    }
+
+    function isSettlementAllowed(address _otoken) public view returns (bool) {
+        return controller.isSettlementAllowed(_otoken);
+    }
+
+    function isOperator(address _owner, address _operator)
+        public
+        view
+        returns (bool)
+    {
+        return controller.isOperator(_owner, _operator);
+    }
+
+    function isWhitelistedOtoken(address _otoken) public view returns (bool) {
+        return whitelist.isWhitelistedOtoken(_otoken);
+    }
+
+    function isValidVaultId(address _owner, uint256 _vaultId)
+        public
+        view
+        returns (bool)
+    {
+        uint256 vaultCounter = controller.getAccountVaultCounter(_owner);
+        return ((_vaultId > 0) && (_vaultId <= vaultCounter));
+    }
+
+    function _isNotEmpty(address[] memory _array) private pure returns (bool) {
+        return (_array.length > 0) && (_array[0] != address(0));
     }
 
     function min(uint256 a, uint256 b) private pure returns (uint256) {

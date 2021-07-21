@@ -12,13 +12,13 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         _;
     }
 
-    constructor(address _gamma) GammaOperator(_gamma) {}
+    constructor(address _gammaAddressBook) GammaOperator(_gammaAddressBook) {}
 
     function createOrder(
         address _otoken,
         uint256 _amount,
         uint256 _vaultId
-    ) public {
+    ) public override {
         require(
             isWhitelistedOtoken(_otoken),
             "GammaRedeemer::createOrder: Otoken not whitelisted"
@@ -39,7 +39,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
 
-    function cancelOrder(uint256 _orderId) public {
+    function cancelOrder(uint256 _orderId) public override {
         require(
             orders[_orderId].owner == msg.sender,
             "GammaRedeemer::cancelOrder: Sender is not order owner"
@@ -56,7 +56,12 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderFinished(_orderId, true);
     }
 
-    function shouldProcessOrder(uint256 _orderId) public view returns (bool) {
+    function shouldProcessOrder(uint256 _orderId)
+        public
+        view
+        override
+        returns (bool)
+    {
         Order memory order = orders[_orderId];
 
         if (order.isSeller) {
@@ -74,7 +79,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         return true;
     }
 
-    function processOrder(uint256 _orderId) public onlyAuthorized {
+    function processOrder(uint256 _orderId) public override onlyAuthorized {
         Order storage order = orders[_orderId];
         require(
             !order.finished,

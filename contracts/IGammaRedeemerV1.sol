@@ -18,4 +18,16 @@ interface IGammaRedeemerV1 {
         address indexed otoken
     );
     event OrderFinished(uint256 indexed orderId, bool indexed cancelled);
+
+    function createOrder(
+        address _otoken,
+        uint256 _amount,
+        uint256 _vaultId
+    ) external;
+
+    function cancelOrder(uint256 _orderId) external;
+
+    function shouldProcessOrder(uint256 _orderId) external view returns (bool);
+
+    function processOrder(uint256 _orderId) external;
 }
