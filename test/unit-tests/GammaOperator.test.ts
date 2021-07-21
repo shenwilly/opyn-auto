@@ -15,11 +15,10 @@ import {
   MockERC20__factory,
 } from "../../typechain";
 const { time, constants } = require("@openzeppelin/test-helpers");
-import { createValidExpiry, DAY } from "../helpers/utils";
+import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
-import { ActionType } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.ZERO_ADDRESS;
