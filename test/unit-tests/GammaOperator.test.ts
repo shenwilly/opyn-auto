@@ -19,6 +19,7 @@ import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
+import { ActionType } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.ZERO_ADDRESS;
@@ -50,7 +51,7 @@ describe("GammaRedeemer", () => {
   // const optionsAmount = 10;
   // const collateralAmount = optionsAmount * strikePrice;
 
-  let vaultCounter: number;
+  // let vaultCounter: number;
 
   const strikePriceDecimals = 8;
   const optionDecimals = 8;
@@ -300,32 +301,47 @@ describe("GammaRedeemer", () => {
         expiry,
         true
       );
-      
-      const isWhitelistedGammaBefore = await whitelist.isWhitelistedOtoken(deployerAddress);
-      const isWhitelistedOperatorBefore = await gammaOperator.isWhitelistedOtoken(
+
+      const isWhitelistedGammaBefore = await whitelist.isWhitelistedOtoken(
         deployerAddress
       );
+      const isWhitelistedOperatorBefore =
+        await gammaOperator.isWhitelistedOtoken(deployerAddress);
       expect(isWhitelistedGammaBefore).to.be.false;
       expect(isWhitelistedGammaBefore).to.be.eq(isWhitelistedOperatorBefore);
 
-      const isWhitelistedGammaAfter = await whitelist.isWhitelistedOtoken(ethPut.address);
-      const isWhitelistedOperatorAfter = await gammaOperator.isWhitelistedOtoken(
+      const isWhitelistedGammaAfter = await whitelist.isWhitelistedOtoken(
         ethPut.address
       );
+      const isWhitelistedOperatorAfter =
+        await gammaOperator.isWhitelistedOtoken(ethPut.address);
       expect(isWhitelistedGammaAfter).to.be.true;
       expect(isWhitelistedGammaAfter).to.be.eq(isWhitelistedOperatorAfter);
     });
   });
 
   describe("isValidVaultId()", async () => {
-    it("Redeem", async () => {});
-  });
-
-  describe("isNotEmpty()", async () => {
-    it("Redeem", async () => {});
-  });
-
-  describe("min()", async () => {
-    it("Redeem", async () => {});
+    it("should return false if vaultId is zero", async () => {
+      expect(await gammaOperator.isValidVaultId(buyerAddress, 0)).to.be.false;
+    });
+    it("should return false if vault does not exist", async () => {
+      expect(await gammaOperator.isValidVaultId(buyerAddress, 1)).to.be.false;
+    });
+    it("should return true if vault exists", async () => {
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: buyerAddress,
+          secondAddress: buyerAddress,
+          asset: ZERO_ADDR,
+          vaultId: 1,
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(buyer).operate(actionArgs);
+      expect(await gammaOperator.isValidVaultId(buyerAddress, 1)).to.be.true;
+    });
   });
 });
