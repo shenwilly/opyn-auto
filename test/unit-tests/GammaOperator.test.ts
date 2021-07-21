@@ -19,7 +19,7 @@ import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
-import { ActionType } from "../helpers/types/GammaTypes";
+import { ActionType, Vault } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.ZERO_ADDRESS;
@@ -94,6 +94,11 @@ describe("GammaRedeemer", () => {
     await whitelist.whitelistCollateral(weth.address);
     whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
     whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
+
+    await usdc.mint(sellerAddress, parseUnits("100000", usdcDecimals));
+    await usdc
+      .connect(seller)
+      .approve(marginPool.address, parseUnits("100000", usdcDecimals));
   });
 
   describe("redeemOtoken()", async () => {
@@ -200,7 +205,72 @@ describe("GammaRedeemer", () => {
   });
 
   describe("getVaultWithDetails()", async () => {
-    it("Redeem", async () => {});
+    it("should return the same value as Gamma controller", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 1);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("10", strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const collateralAmount = parseUnits("1000", usdcDecimals);
+      const shortOptionAmount = parseUnits("1", optionDecimals);
+
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ZERO_ADDR,
+          vaultId: 1,
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.DepositCollateral,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: usdc.address,
+          vaultId: 1,
+          amount: collateralAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.MintShortOption,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ethPut.address,
+          vaultId: 1,
+          amount: shortOptionAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(seller).operate(actionArgs);
+
+      const [vaultGamma, vaultTypeGamma, timestampGamma] =
+        await controller.getVaultWithDetails(sellerAddress, 1);
+      const [vaultOperator, vaultTypeOperator, timestampOperator] =
+        await gammaOperator.getVaultWithDetails(sellerAddress, 1);
+      expect(vaultGamma[0][0]).to.be.eq(ethPut.address);
+      expect(vaultGamma[0][0]).to.be.eq(vaultOperator[0][0]);
+
+      expect(vaultGamma[2][0]).to.be.eq(usdc.address);
+      expect(vaultGamma[2][0]).to.be.eq(vaultOperator[2][0]);
+      expect(vaultGamma[3][0]).to.be.eq(vaultOperator[3][0]);
+      expect(vaultGamma[5][0]).to.be.eq(vaultOperator[5][0]);
+
+      expect(vaultTypeGamma).to.be.eq(vaultTypeOperator);
+      expect(timestampGamma).to.be.eq(timestampOperator);
+    });
   });
 
   describe("getVaultOtoken()", async () => {
