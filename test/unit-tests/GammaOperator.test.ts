@@ -141,13 +141,13 @@ describe("GammaRedeemer", () => {
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         weth.address,
         expiry,
-        strikePrice,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
         true
       );
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         usdc.address,
         expiry,
-        1,
+        parseUnits("1", strikePriceDecimals),
         true
       );
 
@@ -173,13 +173,13 @@ describe("GammaRedeemer", () => {
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         weth.address,
         expiry,
-        strikePrice,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
         true
       );
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         usdc.address,
         expiry,
-        1,
+        parseUnits("1", strikePriceDecimals),
         true
       );
 
@@ -189,7 +189,47 @@ describe("GammaRedeemer", () => {
   });
 
   describe("getRedeemPayout()", async () => {
-    it("Redeem", async () => {});
+    it("should return the same value as gamma controller", async () => {
+      const strikePrice = parseUnits("175", strikePriceDecimals);
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 1);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("200", strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        strikePrice,
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      const payoutOperator = await gammaOperator.getRedeemPayout(
+        ethPut.address,
+        parseUnits("100", optionDecimals)
+      );
+      const payoutGamma = await controller.getPayout(
+        ethPut.address,
+        parseUnits("100", optionDecimals)
+      );
+      expect(payoutOperator).to.be.eq(payoutGamma);
+    });
   });
 
   describe("getRedeemableAmount()", async () => {
@@ -387,13 +427,13 @@ describe("GammaRedeemer", () => {
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         weth.address,
         expiry,
-        100,
+        parseUnits("50", strikePriceDecimals),
         true
       );
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         usdc.address,
         expiry,
-        1,
+        parseUnits("1", strikePriceDecimals),
         true
       );
 
