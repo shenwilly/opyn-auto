@@ -101,11 +101,177 @@ describe("GammaRedeemer", () => {
   });
 
   describe("shouldRedeemOtoken()", async () => {
-    it("Redeem", async () => {});
+    let ethPut: Otoken;
+    let expiry: number;
+    let strikePrice = 200;
+    let strikePriceITM = 150;
+    let strikePriceOTM = 250;
+
+    const collateralAmount = parseUnits("1000", usdcDecimals);
+    const shortOptionAmount = parseUnits("1", optionDecimals);
+
+    before(async () => {
+      const now = (await time.latest()).toNumber();
+      expiry = createValidExpiry(now, 14);
+
+      ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ZERO_ADDR,
+          vaultId: vaultId.toString(),
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.DepositCollateral,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: usdc.address,
+          vaultId: vaultId.toString(),
+          amount: collateralAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.MintShortOption,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ethPut.address,
+          vaultId: vaultId.toString(),
+          amount: shortOptionAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(seller).operate(actionArgs);
+    });
+
+    it("should return false if otoken has not expired", async () => {
+      const now = (await time.latest()).toNumber();
+      expect(now).to.be.lt(expiry);
+      expect(
+        await gammaOperator.shouldRedeemOtoken(sellerAddress, ethPut.address, 1)
+      ).to.be.eq(false);
+    });
+
+    describe("after expiry", () => {
+      before(async () => {
+        await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+        await ethers.provider.send("evm_mine", []);
+      });
+
+      it("should return false if prices are not settled yet", async () => {
+        expect(
+          await gammaOperator.shouldRedeemOtoken(
+            sellerAddress,
+            ethPut.address,
+            1
+          )
+        ).to.be.eq(false);
+      });
+      it("should return false if allowance is 0", async () => {
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          weth.address,
+          expiry,
+          parseUnits(strikePriceITM.toString(), strikePriceDecimals),
+          true
+        );
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          usdc.address,
+          expiry,
+          parseUnits("1", strikePriceDecimals),
+          true
+        );
+        expect(
+          await gammaOperator.shouldRedeemOtoken(
+            sellerAddress,
+            ethPut.address,
+            1
+          )
+        ).to.be.eq(false);
+      });
+      it("should return false if payout is zero", async () => {
+        await ethPut
+          .connect(seller)
+          .approve(gammaOperator.address, shortOptionAmount);
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          weth.address,
+          expiry,
+          parseUnits(strikePriceOTM.toString(), strikePriceDecimals),
+          true
+        );
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          usdc.address,
+          expiry,
+          parseUnits("1", strikePriceDecimals),
+          true
+        );
+
+        expect(
+          await gammaOperator.shouldRedeemOtoken(
+            sellerAddress,
+            ethPut.address,
+            1
+          )
+        ).to.be.eq(false);
+      });
+      it("should return true if payout is greater than zero", async () => {
+        await ethPut
+          .connect(seller)
+          .approve(gammaOperator.address, shortOptionAmount);
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          weth.address,
+          expiry,
+          parseUnits(strikePriceITM.toString(), strikePriceDecimals),
+          true
+        );
+        await oracle.setExpiryPriceFinalizedAllPeiodOver(
+          usdc.address,
+          expiry,
+          parseUnits("1", strikePriceDecimals),
+          true
+        );
+
+        const test = await gammaOperator.getRedeemableAmount(
+          sellerAddress,
+          ethPut.address,
+          shortOptionAmount
+        );
+        const balance = await ethPut.balanceOf(sellerAddress);
+        expect(
+          await gammaOperator.shouldRedeemOtoken(
+            sellerAddress,
+            ethPut.address,
+            shortOptionAmount
+          )
+        ).to.be.eq(true);
+      });
+    });
   });
 
   describe("shouldSettleVault()", async () => {
-    it("Redeem", async () => {});
+    it("should return false if vault is not valid", async () => {});
+    it("should return false if not operator", async () => {});
+    it("should return false if vault is empty", async () => {});
+    it("should return false if vault otoken has not expired", async () => {});
+    it("should return false if vault has no excess collateral", async () => {});
+    it("should return true if vault can be settled", async () => {});
   });
 
   describe("hasExpiredAndSettlementAllowed()", async () => {
