@@ -233,7 +233,100 @@ describe("GammaRedeemer", () => {
   });
 
   describe("getRedeemableAmount()", async () => {
-    it("Redeem", async () => {});
+    it("should return the smallest value", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 1);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits("1000", strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const collateralAmount = parseUnits("1000", usdcDecimals);
+      const shortOptionAmount = parseUnits("1", optionDecimals);
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ZERO_ADDR,
+          vaultId: vaultId.toString(),
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.DepositCollateral,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: usdc.address,
+          vaultId: 1,
+          amount: collateralAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.MintShortOption,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ethPut.address,
+          vaultId: 1,
+          amount: shortOptionAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(seller).operate(actionArgs);
+
+      await ethPut.connect(seller).approve(gammaOperator.address, 0);
+      expect(
+        await gammaOperator.getRedeemableAmount(
+          sellerAddress,
+          ethPut.address,
+          10
+        )
+      ).to.be.eq(0);
+
+      await ethPut.connect(seller).approve(gammaOperator.address, 10);
+      expect(
+        await gammaOperator.getRedeemableAmount(
+          sellerAddress,
+          ethPut.address,
+          100
+        )
+      ).to.be.eq(10);
+
+      await ethPut
+        .connect(seller)
+        .approve(gammaOperator.address, shortOptionAmount);
+      expect(
+        await gammaOperator.getRedeemableAmount(
+          sellerAddress,
+          ethPut.address,
+          100
+        )
+      ).to.be.eq(100);
+
+      await ethPut
+        .connect(seller)
+        .approve(gammaOperator.address, shortOptionAmount.mul(2));
+      expect(
+        await gammaOperator.getRedeemableAmount(
+          sellerAddress,
+          ethPut.address,
+          shortOptionAmount.mul(2)
+        )
+      ).to.be.eq(shortOptionAmount);
+    });
   });
 
   describe("getVaultWithDetails()", async () => {
@@ -254,7 +347,9 @@ describe("GammaRedeemer", () => {
       const collateralAmount = parseUnits("1000", usdcDecimals);
       const shortOptionAmount = parseUnits("1", optionDecimals);
 
-      const vaultId = (await controller.getAccountVaultCounter(sellerAddress)).add(1);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
       const actionArgs = [
         {
           actionType: ActionType.OpenVault,
@@ -292,7 +387,10 @@ describe("GammaRedeemer", () => {
       const [vaultGamma, vaultTypeGamma, timestampGamma] =
         await controller.getVaultWithDetails(sellerAddress, vaultId.toString());
       const [vaultOperator, vaultTypeOperator, timestampOperator] =
-        await gammaOperator.getVaultWithDetails(sellerAddress, vaultId.toString());
+        await gammaOperator.getVaultWithDetails(
+          sellerAddress,
+          vaultId.toString()
+        );
       expect(vaultGamma[0][0]).to.be.eq(ethPut.address);
       expect(vaultGamma[0][0]).to.be.eq(vaultOperator[0][0]);
 
@@ -516,7 +614,9 @@ describe("GammaRedeemer", () => {
       expect(await gammaOperator.isValidVaultId(buyerAddress, 1)).to.be.false;
     });
     it("should return true if vault exists", async () => {
-      const vaultId = (await controller.getAccountVaultCounter(buyerAddress)).add(1);
+      const vaultId = (
+        await controller.getAccountVaultCounter(buyerAddress)
+      ).add(1);
       const actionArgs = [
         {
           actionType: ActionType.OpenVault,
