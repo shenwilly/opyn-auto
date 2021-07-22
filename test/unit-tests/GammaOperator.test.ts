@@ -41,17 +41,8 @@ describe("GammaRedeemer", () => {
   let controller: Controller;
   let gammaOperator: GammaOperatorWrapper;
 
-  // let expiry: number;
   let usdc: MockERC20;
   let weth: MockERC20;
-
-  // let ethPut: Otoken;
-
-  // const strikePrice = 300;
-  // const optionsAmount = 10;
-  // const collateralAmount = optionsAmount * strikePrice;
-
-  // let vaultCounter: number;
 
   const strikePriceDecimals = 8;
   const optionDecimals = 8;
@@ -269,7 +260,7 @@ describe("GammaRedeemer", () => {
           owner: sellerAddress,
           secondAddress: sellerAddress,
           asset: usdc.address,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: collateralAmount,
           index: "0",
           data: ZERO_ADDR,
@@ -279,7 +270,7 @@ describe("GammaRedeemer", () => {
           owner: sellerAddress,
           secondAddress: sellerAddress,
           asset: ethPut.address,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: shortOptionAmount,
           index: "0",
           data: ZERO_ADDR,
