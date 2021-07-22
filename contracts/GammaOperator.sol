@@ -213,6 +213,6 @@ contract GammaOperator is Ownable {
     }
 
     function min(uint256 a, uint256 b) private pure returns (uint256) {
-        return a > b ? a : b;
+        return a > b ? b : a;
     }
 }
