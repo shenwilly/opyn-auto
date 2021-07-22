@@ -254,13 +254,14 @@ describe("GammaRedeemer", () => {
       const collateralAmount = parseUnits("1000", usdcDecimals);
       const shortOptionAmount = parseUnits("1", optionDecimals);
 
+      const vaultId = (await controller.getAccountVaultCounter(sellerAddress)).add(1);
       const actionArgs = [
         {
           actionType: ActionType.OpenVault,
           owner: sellerAddress,
           secondAddress: sellerAddress,
           asset: ZERO_ADDR,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: "0",
           index: "0",
           data: ZERO_ADDR,
@@ -270,7 +271,7 @@ describe("GammaRedeemer", () => {
           owner: sellerAddress,
           secondAddress: sellerAddress,
           asset: usdc.address,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: collateralAmount,
           index: "0",
           data: ZERO_ADDR,
@@ -280,7 +281,7 @@ describe("GammaRedeemer", () => {
           owner: sellerAddress,
           secondAddress: sellerAddress,
           asset: ethPut.address,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: shortOptionAmount,
           index: "0",
           data: ZERO_ADDR,
@@ -289,9 +290,9 @@ describe("GammaRedeemer", () => {
       await controller.connect(seller).operate(actionArgs);
 
       const [vaultGamma, vaultTypeGamma, timestampGamma] =
-        await controller.getVaultWithDetails(sellerAddress, 1);
+        await controller.getVaultWithDetails(sellerAddress, vaultId.toString());
       const [vaultOperator, vaultTypeOperator, timestampOperator] =
-        await gammaOperator.getVaultWithDetails(sellerAddress, 1);
+        await gammaOperator.getVaultWithDetails(sellerAddress, vaultId.toString());
       expect(vaultGamma[0][0]).to.be.eq(ethPut.address);
       expect(vaultGamma[0][0]).to.be.eq(vaultOperator[0][0]);
 
@@ -515,13 +516,14 @@ describe("GammaRedeemer", () => {
       expect(await gammaOperator.isValidVaultId(buyerAddress, 1)).to.be.false;
     });
     it("should return true if vault exists", async () => {
+      const vaultId = (await controller.getAccountVaultCounter(buyerAddress)).add(1);
       const actionArgs = [
         {
           actionType: ActionType.OpenVault,
           owner: buyerAddress,
           secondAddress: buyerAddress,
           asset: ZERO_ADDR,
-          vaultId: 1,
+          vaultId: vaultId.toString(),
           amount: "0",
           index: "0",
           data: ZERO_ADDR,
