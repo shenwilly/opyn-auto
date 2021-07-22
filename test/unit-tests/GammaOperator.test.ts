@@ -248,12 +248,6 @@ describe("GammaRedeemer", () => {
           true
         );
 
-        const test = await gammaOperator.getRedeemableAmount(
-          sellerAddress,
-          ethPut.address,
-          shortOptionAmount
-        );
-        const balance = await ethPut.balanceOf(sellerAddress);
         expect(
           await gammaOperator.shouldRedeemOtoken(
             sellerAddress,
