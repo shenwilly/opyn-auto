@@ -26,6 +26,7 @@ import {
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
+import { BigNumber } from "@ethersproject/bignumber";
 const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -235,7 +236,34 @@ describe("GammaRedeemer", () => {
   });
 
   describe("cancelOrder()", async () => {
-    it("Redeem", async () => {});
+    let orderId: BigNumber;
+    beforeEach(async () => {
+      orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+    });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).cancelOrder(orderId),
+        "GammaRedeemer::cancelOrder: Sender is not order owner"
+      );
+    });
+    it("should revert if order is already finished", async () => {
+      await gammaRedeemer.connect(seller).cancelOrder(orderId);
+
+      await expectRevert(
+        gammaRedeemer.connect(seller).cancelOrder(orderId),
+        "GammaRedeemer::cancelOrder: Order is already finished"
+      );
+    });
+    it("should cancel order", async () => {
+      const tx = await gammaRedeemer.connect(seller).cancelOrder(orderId);
+      const receipt = await tx.wait();
+      const event = receipt.events!.filter(
+        (event) => event.event == "OrderFinished"
+      )[0];
+      expect(event.args![0]).to.be.eq(orderId);
+      expect(event.args![1]).to.be.eq(true);
+    });
   });
 
   describe("shouldProcessOrder()", async () => {
