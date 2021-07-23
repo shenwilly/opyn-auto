@@ -23,6 +23,7 @@ import {
   getActionDepositCollateral,
   getActionMintShort,
   getActionOpenVault,
+  setOperator,
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
@@ -342,139 +343,127 @@ describe("GammaRedeemer", () => {
   });
 
   describe("processOrder()", async () => {
-    it("should revert if order is already finished", async () => {});
-    it("should revert if shouldProcessOrder is false", async () => {});
+    let ethPut: Otoken;
+    before(async () => {
+      const now = (await time.latest()).toNumber();
+      expiry = createValidExpiry(now, 7);
+
+      await otokenFactory.createOtoken(
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+      const ethPutAddress = await otokenFactory.getOtoken(
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          parseUnits(collateralAmount.toString(), usdcDecimals)
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals)
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+      await ethPut
+        .connect(seller)
+        .transfer(
+          buyerAddress,
+          parseUnits(optionAmount.toString(), optionDecimals)
+        );
+
+      await ethPut
+        .connect(buyer)
+        .approve(
+          gammaRedeemer.address,
+          parseUnits(optionAmount.toString(), optionDecimals)
+        );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(expiryPriceITM.toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+    });
+    it("should revert if order is already finished", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      await gammaRedeemer.connect(seller).cancelOrder(orderId);
+
+      await expectRevert(
+        gammaRedeemer.processOrder(orderId),
+        "GammaRedeemer::processOrder: Order is already finished"
+      );
+    });
+    it("should revert if shouldProcessOrder is false", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+
+      await setOperator(seller, controller, gammaRedeemer.address, false);
+      await expectRevert(
+        gammaRedeemer.processOrder(orderId),
+        "GammaRedeemer::processOrder: Order should not be processed"
+      );
+    });
+    it("should redeemOtoken if isSeller is false", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+    });
+    it("should settleVault if isSeller is true", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(expiryPriceOTM.toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+    });
   });
-
-  // describe("Redeem", async () => {
-  //   const scaledOptionsAmount = parseUnits(
-  //     optionsAmount.toString(),
-  //     optionDecimals
-  //   );
-  //   const scaledCollateralAmount = parseUnits(
-  //     collateralAmount.toString(),
-  //     usdcDecimals
-  //   );
-  //   const expiryITMSpotPrice = 100;
-  //   const expiryOTMSpotPrice = 500;
-
-  //   beforeEach("Open a short put option", async () => {
-  //     const actionArgs = [
-  //       {
-  //         actionType: ActionType.OpenVault,
-  //         owner: sellerAddress,
-  //         secondAddress: sellerAddress,
-  //         asset: ZERO_ADDR,
-  //         vaultId: vaultCounter,
-  //         amount: "0",
-  //         index: "0",
-  //         data: ZERO_ADDR,
-  //       },
-  //       {
-  //         actionType: ActionType.MintShortOption,
-  //         owner: sellerAddress,
-  //         secondAddress: sellerAddress,
-  //         asset: ethPut.address,
-  //         vaultId: vaultCounter,
-  //         amount: scaledOptionsAmount,
-  //         index: "0",
-  //         data: ZERO_ADDR,
-  //       },
-  //       {
-  //         actionType: ActionType.DepositCollateral,
-  //         owner: sellerAddress,
-  //         secondAddress: sellerAddress,
-  //         asset: usdc.address,
-  //         vaultId: vaultCounter,
-  //         amount: scaledCollateralAmount,
-  //         index: "0",
-  //         data: ZERO_ADDR,
-  //       },
-  //     ];
-
-  //     await controller.connect(seller).operate(actionArgs);
-  //     await ethPut.connect(seller).transfer(buyerAddress, scaledOptionsAmount);
-
-  //     vaultCounter++;
-  //   });
-
-  //   it("Redeem", async () => {
-  //     await ethPut
-  //       .connect(buyer)
-  //       .approve(gammaRedeemer.address, scaledOptionsAmount);
-  //     const tx = await gammaRedeemer
-  //       .connect(buyer)
-  //       .createOrder(ethPut.address, scaledOptionsAmount, 0);
-  //     const receipt = await tx.wait();
-  //     const event = receipt.events!.filter(
-  //       (event) => event.event == "OrderCreated"
-  //     )[0];
-  //     const orderId = event.args![0];
-
-  //     if ((await time.latest()) < expiry) {
-  //       await time.increaseTo(expiry + 2);
-  //     }
-
-  //     const scaledETHPrice = parseUnits(
-  //       expiryITMSpotPrice.toString(),
-  //       strikePriceDecimals
-  //     );
-  //     const scaledUSDCPrice = parseUnits("1", strikePriceDecimals);
-  //     await oracle.setExpiryPriceFinalizedAllPeiodOver(
-  //       weth.address,
-  //       expiry,
-  //       scaledETHPrice,
-  //       true
-  //     );
-  //     await oracle.setExpiryPriceFinalizedAllPeiodOver(
-  //       usdc.address,
-  //       expiry,
-  //       scaledUSDCPrice,
-  //       true
-  //     );
-
-  //     expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.true;
-  //     console.log((await usdc.balanceOf(buyerAddress)).toString(), "start");
-  //     await gammaRedeemer.processOrder(orderId);
-  //     console.log((await usdc.balanceOf(buyerAddress)).toString(), "finish");
-  //   });
-
-  // it("Should not redeem", async () => {
-  //   await ethPut
-  //     .connect(buyer)
-  //     .approve(gammaRedeemer.address, scaledOptionsAmount);
-  //   const tx = await gammaRedeemer
-  //     .connect(buyer)
-  //     .createOrder(ethPut.address, scaledOptionsAmount, 0);
-  //   const receipt = await tx.wait();
-  //   const event = receipt.events!.filter(
-  //     (event) => event.event == "OrderCreated"
-  //   )[0];
-  //   const orderId = event.args![0];
-
-  //   if ((await time.latest()) < expiry) {
-  //     await time.increaseTo(expiry + 2);
-  //   }
-
-  //   const scaledETHPrice = parseUnits(
-  //     expiryOTMSpotPrice.toString(),
-  //     strikePriceDecimals
-  //   );
-  //   const scaledUSDCPrice = parseUnits("1", strikePriceDecimals);
-  //   await oracle.setExpiryPriceFinalizedAllPeiodOver(
-  //     weth.address,
-  //     expiry,
-  //     scaledETHPrice,
-  //     true
-  //   );
-  //   await oracle.setExpiryPriceFinalizedAllPeiodOver(
-  //     usdc.address,
-  //     expiry,
-  //     scaledUSDCPrice,
-  //     true
-  //   );
-
-  //   expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.false;
-  // });
-  // });
 });
