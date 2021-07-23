@@ -17,7 +17,14 @@ import {
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
-import { createOtoken, setupGammaContracts } from "../helpers/setup/GammaSetup";
+import {
+  createOtoken,
+  getActionDepositCollateral,
+  getActionMintShort,
+  getActionOpenVault,
+  setOperator,
+  setupGammaContracts,
+} from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
 
 const { expect } = chai;
@@ -260,12 +267,237 @@ describe("GammaRedeemer", () => {
   });
 
   describe("shouldSettleVault()", async () => {
-    it("should return false if vault is not valid", async () => {});
-    it("should return false if not operator", async () => {});
-    it("should return false if vault is empty", async () => {});
-    it("should return false if vault otoken has not expired", async () => {});
-    it("should return false if vault has no excess collateral", async () => {});
-    it("should return true if vault can be settled", async () => {});
+    const collateralAmount = parseUnits("1000", usdcDecimals);
+    let strikePrice = 100;
+    // TODO: refactor new otoken setup
+
+    it("should return false if vault is not valid", async () => {
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+    });
+    it("should return false if not operator", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 21);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      await setOperator(seller, controller, gammaOperator.address, false);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          parseUnits("1", optionDecimals)
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits((strikePrice + 10).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+    });
+    it("should return false if vault is empty", async () => {
+      await setOperator(seller, controller, gammaOperator.address, true);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+    });
+    it("should return false if vault otoken has not expired", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 23);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      await setOperator(seller, controller, gammaOperator.address, true);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          parseUnits("1", optionDecimals)
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+    });
+    it("should return false if vault has no excess collateral", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 24);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      await setOperator(seller, controller, gammaOperator.address, true);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          parseUnits("10", optionDecimals)
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        100,
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+    });
+    it("should return true if vault can be settled", async () => {
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 21);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      await setOperator(seller, controller, gammaOperator.address, true);
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actions = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          parseUnits("1", optionDecimals)
+        ),
+      ];
+      await controller.connect(seller).operate(actions);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits((strikePrice + 10).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+      expect(
+        await gammaOperator.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(true);
+    });
   });
 
   describe("hasExpiredAndSettlementAllowed()", async () => {
