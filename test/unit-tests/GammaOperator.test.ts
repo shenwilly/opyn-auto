@@ -181,7 +181,71 @@ describe("GammaRedeemer", () => {
   });
 
   describe("settleVault()", async () => {
-    it("Redeem", async () => {});
+    it("should settle vault correctly", async () => {
+      let strikePrice = 200;
+      let collateralAmount = parseUnits("1000", usdcDecimals);
+      let shortOptionAmount = parseUnits("1", optionDecimals);
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 21);
+
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          shortOptionAmount
+        ),
+      ];
+      await controller.connect(seller).operate(actionArgs);
+      await setOperator(seller, controller, gammaOperator.address, true);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const usdcBalanceBefore = await usdc.balanceOf(sellerAddress);
+      const proceed = await controller.getProceed(sellerAddress, vaultId);
+
+      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId);
+
+      const usdcBalanceAfter = await usdc.balanceOf(sellerAddress);
+
+      expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
+      const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
+      expect(difference).to.be.eq(proceed);
+    });
   });
 
   describe("shouldRedeemOtoken()", async () => {
