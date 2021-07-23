@@ -431,7 +431,7 @@ describe("GammaRedeemer", () => {
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
         weth.address,
         expiry,
-        100,
+        1,
         true
       );
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
