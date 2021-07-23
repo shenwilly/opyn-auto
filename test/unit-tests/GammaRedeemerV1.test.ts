@@ -56,6 +56,8 @@ describe("GammaRedeemer", () => {
   let ethPut: Otoken;
 
   const strikePrice = 300;
+  const expiryPriceITM = 200;
+  const expiryPriceOTM = 400;
   const optionsAmount = 10;
   const collateralAmount = optionsAmount * strikePrice;
   const optionAmount = 1;
@@ -156,6 +158,14 @@ describe("GammaRedeemer", () => {
         buyerAddress,
         parseUnits(optionAmount.toString(), optionDecimals)
       );
+
+    await ethPut
+      .connect(buyer)
+      .approve(
+        gammaRedeemer.address,
+        parseUnits(optionAmount.toString(), optionDecimals)
+      );
+    await controller.connect(seller).setOperator(gammaRedeemer.address, true);
   });
 
   describe("createOrder()", async () => {
@@ -267,11 +277,73 @@ describe("GammaRedeemer", () => {
   });
 
   describe("shouldProcessOrder()", async () => {
-    it("Redeem", async () => {});
+    it("should return false if isSeller is true and shouldSettleVault is false", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return false if isSeller is false and shouldRedeemOtoken is false", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return true for buyer", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(expiryPriceITM.toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+    });
+    it("should return true for seller", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(expiryPriceOTM.toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+    });
   });
 
   describe("processOrder()", async () => {
-    it("Redeem", async () => {});
+    it("should revert if order is already finished", async () => {});
+    it("should revert if shouldProcessOrder is false", async () => {});
   });
 
   // describe("Redeem", async () => {
