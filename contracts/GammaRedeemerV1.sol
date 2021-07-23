@@ -101,4 +101,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
         emit OrderFinished(_orderId, false);
     }
+
+    function getOrdersLength() public view returns (uint256) {
+        return orders.length;
+    }
 }
