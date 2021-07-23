@@ -13,13 +13,20 @@ import {
   MockERC20__factory,
   GammaRedeemerV1__factory,
   GammaRedeemerV1,
+  GammaOperator,
 } from "../../typechain";
-const { time, constants } = require("@openzeppelin/test-helpers");
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
-import { setupGammaContracts } from "../helpers/setup/GammaSetup";
+import {
+  createOtoken,
+  getActionDepositCollateral,
+  getActionMintShort,
+  getActionOpenVault,
+  setupGammaContracts,
+} from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
+const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
 const ZERO_ADDR = constants.ZERO_ADDRESS;
@@ -50,8 +57,7 @@ describe("GammaRedeemer", () => {
   const strikePrice = 300;
   const optionsAmount = 10;
   const collateralAmount = optionsAmount * strikePrice;
-
-  let vaultCounter: number;
+  const optionAmount = 1;
 
   const strikePriceDecimals = 8;
   const optionDecimals = 8;
@@ -74,9 +80,6 @@ describe("GammaRedeemer", () => {
       controller,
     ] = await setupGammaContracts();
 
-    const now = (await time.latest()).toNumber();
-    expiry = createValidExpiry(now, 30);
-
     // setup usdc and weth
     const mockERC20Factory = (await ethers.getContractFactory(
       "MockERC20"
@@ -89,6 +92,16 @@ describe("GammaRedeemer", () => {
     await whitelist.whitelistCollateral(weth.address);
     whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
     whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
+
+    // deploy Vault Operator
+    const GammaRedeemerFactory = (await ethers.getContractFactory(
+      "GammaRedeemerV1",
+      buyer
+    )) as GammaRedeemerV1__factory;
+    gammaRedeemer = await GammaRedeemerFactory.deploy(addressBook.address);
+
+    const now = (await time.latest()).toNumber();
+    expiry = createValidExpiry(now, 7);
 
     await otokenFactory.createOtoken(
       weth.address,
@@ -117,21 +130,108 @@ describe("GammaRedeemer", () => {
     await usdc.mint(sellerAddress, initialAmountUsdc);
     await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
 
-    const vaultCounterBefore = await controller.getAccountVaultCounter(
-      sellerAddress
-    );
-    vaultCounter = vaultCounterBefore.toNumber() + 1;
-
-    // deploy Vault Operator
-    const GammaRedeemerFactory = (await ethers.getContractFactory(
-      "GammaRedeemerV1",
-      buyer
-    )) as GammaRedeemerV1__factory;
-    gammaRedeemer = await GammaRedeemerFactory.deploy(addressBook.address);
+    const vaultId = (
+      await controller.getAccountVaultCounter(sellerAddress)
+    ).add(1);
+    const actions = [
+      getActionOpenVault(sellerAddress, vaultId.toString()),
+      getActionDepositCollateral(
+        sellerAddress,
+        vaultId.toString(),
+        usdc.address,
+        parseUnits(collateralAmount.toString(), usdcDecimals)
+      ),
+      getActionMintShort(
+        sellerAddress,
+        vaultId.toString(),
+        ethPut.address,
+        parseUnits(optionAmount.toString(), optionDecimals)
+      ),
+    ];
+    await controller.connect(seller).operate(actions);
+    await ethPut
+      .connect(seller)
+      .transfer(
+        buyerAddress,
+        parseUnits(optionAmount.toString(), optionDecimals)
+      );
   });
 
   describe("createOrder()", async () => {
-    it("Redeem", async () => {});
+    it("should revert if otoken is not whitelisted", async () => {
+      await expectRevert(
+        gammaRedeemer
+          .connect(buyer)
+          .createOrder(
+            buyerAddress,
+            parseUnits(optionAmount.toString(), optionDecimals),
+            0
+          ),
+        "GammaRedeemer::createOrder: Otoken not whitelisted"
+      );
+    });
+    it("should create buyer order", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      const tx = await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      const receipt = await tx.wait();
+      const event = receipt.events!.filter(
+        (event) => event.event == "OrderCreated"
+      )[0];
+      expect(event.args![0]).to.be.eq(orderId);
+
+      const [
+        orderOwner,
+        orderOtoken,
+        orderAmount,
+        orderVaultId,
+        orderIsSeller,
+        orderToEth,
+        orderFinished,
+      ] = await gammaRedeemer.orders(orderId);
+      expect(orderOwner).to.be.eq(buyerAddress);
+      expect(orderOtoken).to.be.eq(ethPut.address);
+      expect(orderAmount).to.be.eq(
+        parseUnits(optionAmount.toString(), optionDecimals)
+      );
+      // expect(orderVaultId).to.be.eq(0);
+      expect(orderIsSeller).to.be.eq(false);
+      expect(orderToEth).to.be.eq(false);
+      expect(orderFinished).to.be.eq(false);
+    });
+    it("should create seller order", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      const tx = await gammaRedeemer
+        .connect(seller)
+        .createOrder(ethPut.address, 0, 1);
+      const receipt = await tx.wait();
+      const event = receipt.events!.filter(
+        (event) => event.event == "OrderCreated"
+      )[0];
+      expect(event.args![0]).to.be.eq(orderId);
+
+      const [
+        orderOwner,
+        orderOtoken,
+        orderAmount,
+        orderVaultId,
+        orderIsSeller,
+        orderToEth,
+        orderFinished,
+      ] = await gammaRedeemer.orders(orderId);
+      expect(orderOwner).to.be.eq(sellerAddress);
+      // expect(orderOtoken).to.be.eq(ethPut.address);
+      expect(orderAmount).to.be.eq(0);
+      expect(orderVaultId).to.be.eq(1);
+      expect(orderIsSeller).to.be.eq(true);
+      expect(orderToEth).to.be.eq(false);
+      expect(orderFinished).to.be.eq(false);
+    });
   });
 
   describe("cancelOrder()", async () => {
