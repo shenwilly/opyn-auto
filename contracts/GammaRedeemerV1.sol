@@ -4,9 +4,15 @@ pragma solidity 0.8.0;
 import {GammaOperator} from "./GammaOperator.sol";
 import {IGammaRedeemerV1} from "./IGammaRedeemerV1.sol";
 
+/// @author Willy Shen
+/// @title Gamma Automatic Redeemer
+/// @notice An automatic redeemer for Gmma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
+    /**
+     * @notice only automator
+     */
     modifier onlyAuthorized() {
         // msg.sender == executor
         _;
@@ -14,6 +20,12 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     constructor(address _gammaAddressBook) GammaOperator(_gammaAddressBook) {}
 
+    /**
+     * @notice create automation order
+     * @param _otoken the address of otoken
+     * @param _amount amount of otoken
+     * @param _vaultId only for writers, the vaultId to settle
+     */
     function createOrder(
         address _otoken,
         uint256 _amount,
@@ -39,6 +51,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
 
+    /**
+     * @notice cancel automation order
+     * @param _orderId the order Id to be cancelled
+     */
     function cancelOrder(uint256 _orderId) public override {
         require(
             orders[_orderId].owner == msg.sender,
@@ -56,6 +72,12 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderFinished(_orderId, true);
     }
 
+    /**
+     * @notice check if processing order is allowed and profitable
+     * @dev automator should call this first before calling processOrder
+     * @param _orderId the order Id to be processed
+     * @return true if vault can be settled (writer) / otoken can be redeemed (buyer)
+     */
     function shouldProcessOrder(uint256 _orderId)
         public
         view
@@ -79,6 +101,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         return true;
     }
 
+    /**
+     * @notice process an order
+     * @dev only automator allowed
+     * @param _orderId the order Id to be processed
+     */
     function processOrder(uint256 _orderId) public override onlyAuthorized {
         Order storage order = orders[_orderId];
         require(
