@@ -13,19 +13,33 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IOtoken} from "./interfaces/IOtoken.sol";
 
+/// @author Willy Shen
+/// @title Gamma Operator
+/// @notice Opyn Gamma protocol adapter for redeeming otokens and settling vaults
 contract GammaOperator is Ownable {
     using SafeERC20 for IERC20;
 
+    // Gamma Protocol contracts
     IAddressBook public addressBook;
     IGammaController public controller;
     IWhitelist public whitelist;
     IMarginCalculator public calculator;
 
+    /**
+     * @dev fetch Gamma contracts from address book
+     * @param _addressBook Gamma Address Book address
+     */
     constructor(address _addressBook) {
         setAddressBook(_addressBook);
         refreshConfig();
     }
 
+    /**
+     * @notice redeem otoken on behalf of user
+     * @param _owner owner address
+     * @param _otoken otoken address
+     * @param _amount amount of otoken
+     */
     function redeemOtoken(
         address _owner,
         address _otoken,
@@ -47,6 +61,11 @@ contract GammaOperator is Ownable {
         controller.operate(actions);
     }
 
+    /**
+     * @notice settle vault on behalf of user
+     * @param _owner owner address
+     * @param _vaultId vaultId to settle
+     */
     function settleVault(address _owner, uint256 _vaultId) internal {
         Actions.ActionArgs memory action;
         action.actionType = Actions.ActionType.SettleVault;
@@ -60,6 +79,13 @@ contract GammaOperator is Ownable {
         controller.operate(actions);
     }
 
+    /**
+     * @notice return if otoken should be redeemed
+     * @param _owner owner address
+     * @param _otoken otoken address
+     * @param _amount amount of otoken
+     * @return true if otoken has expired and payout is greater than zero
+     */
     function shouldRedeemOtoken(
         address _owner,
         address _otoken,
@@ -74,6 +100,13 @@ contract GammaOperator is Ownable {
         return true;
     }
 
+    /**
+     * @notice return if vault should be settled
+     * @param _owner owner address
+     * @param _vaultId vaultId to settle
+     * @return true if vault can be settled, contract is operator of owner,
+     *          and excess collateral is greater than zero
+     */
     function shouldSettleVault(address _owner, uint256 _vaultId)
         public
         view
@@ -103,6 +136,10 @@ contract GammaOperator is Ownable {
         return true;
     }
 
+    /**
+     * @param _otoken otoken address
+     * @return true if otoken has expired and settlement is allowed
+     */
     function hasExpiredAndSettlementAllowed(address _otoken)
         public
         view
@@ -117,6 +154,10 @@ contract GammaOperator is Ownable {
         return true;
     }
 
+    /**
+     * @notice set Gamma Address Book
+     * @param _address Address Book address
+     */
     function setAddressBook(address _address) public onlyOwner {
         require(
             _address != address(0),
@@ -125,6 +166,9 @@ contract GammaOperator is Ownable {
         addressBook = IAddressBook(_address);
     }
 
+    /**
+     * @notice refresh Gamma contracts' addresses
+     */
     function refreshConfig() public {
         address _controller = addressBook.getController();
         controller = IGammaController(_controller);
@@ -136,6 +180,11 @@ contract GammaOperator is Ownable {
         calculator = IMarginCalculator(_calculator);
     }
 
+    /**
+     * @notice get an oToken's payout in the collateral asset
+     * @param _otoken otoken address
+     * @param _amount amount of otoken to redeem
+     */
     function getRedeemPayout(address _otoken, uint256 _amount)
         public
         view
@@ -144,6 +193,13 @@ contract GammaOperator is Ownable {
         return controller.getPayout(_otoken, _amount);
     }
 
+    /**
+     * @notice get amount of otoken that can be redeemed
+     * @param _owner owner address
+     * @param _otoken otoken address
+     * @param _amount amount of otoken
+     * @return amount of otoken the contract can transferFrom owner
+     */
     function getRedeemableAmount(
         address _owner,
         address _otoken,
@@ -155,6 +211,12 @@ contract GammaOperator is Ownable {
         return min(_amount, spendable);
     }
 
+    /**
+     * @notice return details of a specific vault
+     * @param _owner owner address
+     * @param _vaultId vaultId
+     * @return vault struct and vault type and the latest timestamp when the vault was updated
+     */
     function getVaultWithDetails(address _owner, uint256 _vaultId)
         public
         view
@@ -167,6 +229,11 @@ contract GammaOperator is Ownable {
         return controller.getVaultWithDetails(_owner, _vaultId);
     }
 
+    /**
+     * @notice return the otoken from specific vault
+     * @param _vault vault struct
+     * @return otoken address
+     */
     function getVaultOtoken(MarginVault.Vault memory _vault)
         public
         pure
@@ -180,6 +247,12 @@ contract GammaOperator is Ownable {
         return hasShort ? _vault.shortOtokens[0] : _vault.longOtokens[0];
     }
 
+    /**
+     * @notice return amount of collateral that can be removed from a vault
+     * @param _vault vault struct
+     * @param _typeVault vault type
+     * @return excess amount and true if excess is greater than zero
+     */
     function getExcessCollateral(
         MarginVault.Vault memory _vault,
         uint256 _typeVault
@@ -187,18 +260,39 @@ contract GammaOperator is Ownable {
         return calculator.getExcessCollateral(_vault, _typeVault);
     }
 
+    /**
+     * @notice return if otoken is ready to be settled
+     * @param _otoken otoken address
+     * @return true if settlement is allowed
+     */
     function isSettlementAllowed(address _otoken) public view returns (bool) {
         return controller.isSettlementAllowed(_otoken);
     }
 
+    /**
+     * @notice return if this contract is Gamma operator of an address
+     * @param _owner owner address
+     * @return true if address(this) is operator of _owner
+     */
     function isOperatorOf(address _owner) public view returns (bool) {
         return controller.isOperator(_owner, address(this));
     }
 
+    /**
+     * @notice return if otoken is whitelisted on Gamma
+     * @param _otoken otoken address
+     * @return true if isWhitelistedOtoken returns true for _otoken
+     */
     function isWhitelistedOtoken(address _otoken) public view returns (bool) {
         return whitelist.isWhitelistedOtoken(_otoken);
     }
 
+    /**
+     * @notice return if specific vault exist
+     * @param _owner owner address
+     * @param _vaultId vaultId to check
+     * @return true if vault exist for owner
+     */
     function isValidVaultId(address _owner, uint256 _vaultId)
         public
         view
@@ -208,10 +302,21 @@ contract GammaOperator is Ownable {
         return ((_vaultId > 0) && (_vaultId <= vaultCounter));
     }
 
+    /**
+     * @notice return if array is not empty
+     * @param _array array of address to check
+     * @return true if array length is grreater than zero & first element isn't address zero
+     */
     function isNotEmpty(address[] memory _array) private pure returns (bool) {
         return (_array.length > 0) && (_array[0] != address(0));
     }
 
+    /**
+     * @notice return the lowest number
+     * @param a first number
+     * @param b second number
+     * @return the lowest uint256
+     */
     function min(uint256 a, uint256 b) private pure returns (uint256) {
         return a > b ? b : a;
     }
