@@ -1,19 +1,21 @@
 import { ethers } from "hardhat";
+import {
+  GammaRedeemerV1__factory,
+} from "../typechain";
 
 async function main() {
-  const factory = await ethers.getContractFactory("Counter");
+  const PokeMeAddress = "0xeC8700A092789F58608212E314e3576bF2E98556";
+  const GammaAddressBookAddress = "0xE71417EEfC794C9B83Fc494861981721e26db0E9"
 
-  // If we had constructor arguments, they would be passed into deploy()
-  let contract = await factory.deploy();
+  const GammaRedeemerFactory = (
+    await ethers.getContractFactory("GammaRedeemerV1")
+  ) as GammaRedeemerV1__factory;
 
-  // The address the Contract WILL have once mined
-  console.log(contract.address);
+  let gammaRedeemer = await GammaRedeemerFactory.deploy(GammaAddressBookAddress, PokeMeAddress);
 
-  // The transaction that was sent to the network to deploy the Contract
-  console.log(contract.deployTransaction.hash);
-
-  // The contract is NOT deployed yet; we must wait until it is mined
-  await contract.deployed();
+  console.log(gammaRedeemer.address);
+  console.log(gammaRedeemer.deployTransaction.hash);
+  await gammaRedeemer.deployed();
 }
 
 main()
