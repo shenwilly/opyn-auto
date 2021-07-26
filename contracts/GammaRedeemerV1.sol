@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import {GammaOperator} from "./GammaOperator.sol";
+import {GammaV1Operator} from "./GammaV1Operator.sol";
 import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
 
 /// @author Willy Shen
 /// @title Gamma Automatic Redeemer
 /// @notice An automatic redeemer for Gmma otoken holders and writers
-contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
+contract GammaRedeemerV1 is IGammaRedeemerV1, GammaV1Operator {
     Order[] public orders;
 
     IPokeMe public automator;
@@ -22,7 +22,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     constructor(address _gammaAddressBook, address _automator)
-        GammaOperator(_gammaAddressBook)
+        GammaV1Operator(_gammaAddressBook)
     {
         automator = IPokeMe(_automator);
     }

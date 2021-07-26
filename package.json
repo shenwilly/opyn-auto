@@ -55,7 +55,7 @@
     "eslint-plugin-prettier": "3.4.0",
     "ethereum-waffle": "^3.3.0",
     "ethers": "^5.1.4",
-    "gamma-protocol": "opynfinance/GammaProtocol",
+    "gamma-protocol": "opynfinance/GammaProtocol#v1.1.0",
     "gelato-v1": "gelatodigital/gelato-network",
     "hardhat": "^2.2.1",
     "husky": "^6.0.0",
