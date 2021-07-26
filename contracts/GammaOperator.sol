@@ -91,8 +91,13 @@ contract GammaOperator is Ownable {
         uint256 _amount
     ) public view returns (bool) {
         uint256 actualAmount = getRedeemableAmount(_owner, _otoken, _amount);
-        uint256 payout = getRedeemPayout(_otoken, actualAmount);
-        if (payout == 0) return false;
+        try this.getRedeemPayout(_otoken, actualAmount) returns (
+            uint256 payout
+        ) {
+            if (payout == 0) return false;
+        } catch {
+            return false;
+        }
 
         return true;
     }

@@ -285,32 +285,8 @@ describe("GammaRedeemer", () => {
   });
 
   describe("shouldProcessOrder()", async () => {
-    it("should return false if isSeller is true and shouldSettleVault is false", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(buyer)
-        .createOrder(
-          ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
-          0
-        );
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
-    });
-    it("should return false if isSeller is false and shouldRedeemOtoken is false", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
-    });
-    it("should return true for buyer", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(buyer)
-        .createOrder(
-          ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
-          0
-        );
-
+    const amount = parseUnits(optionAmount.toString(), optionDecimals);
+    before(async () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
@@ -326,25 +302,52 @@ describe("GammaRedeemer", () => {
         parseUnits("1", strikePriceDecimals),
         true
       );
+    });
 
+    it("should return false if isSeller is false and shouldRedeemOtoken is false", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
+      expect(
+        await gammaRedeemer.shouldRedeemOtoken(
+          buyerAddress,
+          ethPut.address,
+          amount
+        )
+      ).to.be.eq(false);
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return false if isSeller is true and shouldSettleVault is false", async () => {
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(2); // non existent vau;t
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ethPut.address, 0, vaultId);
+
+      expect(
+        await gammaRedeemer.shouldSettleVault(sellerAddress, vaultId)
+      ).to.be.eq(false);
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return true for buyer", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
     });
     it("should return true for seller", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      const vaultId = await controller.getAccountVaultCounter(sellerAddress);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
-        expiry,
-        parseUnits(expiryPriceOTM.toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
-      );
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ethPut.address, 0, vaultId);
+
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
     });
   });
@@ -434,16 +437,6 @@ describe("GammaRedeemer", () => {
     });
     it("should revert if shouldProcessOrder is false", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
-
-      await setOperator(seller, controller, gammaRedeemer.address, false);
-      await expectRevert(
-        gammaRedeemer.processOrder(orderId),
-        "GammaRedeemer::processOrder: Order should not be processed"
-      );
-    });
-    it("should redeemOtoken if isSeller is false", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
@@ -452,6 +445,15 @@ describe("GammaRedeemer", () => {
           0
         );
 
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
+      await expect(gammaRedeemer.processOrder(orderId)).to.be.reverted;
+    });
+    it("should redeemOtoken if isSeller is false", async () => {
+      const amount = parseUnits(optionAmount.toString(), optionDecimals);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
       const balanceBefore = await usdc.balanceOf(buyerAddress);
       await gammaRedeemer.connect(deployer).processOrder(orderId);
       const balanceAfter = await usdc.balanceOf(buyerAddress);
