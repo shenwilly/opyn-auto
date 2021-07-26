@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import "hardhat/console.sol";
 import {IAddressBook} from "./interfaces/IAddressBook.sol";
 import {IGammaController} from "./interfaces/IGammaController.sol";
 import {IWhitelist} from "./interfaces/IWhitelist.sol";
