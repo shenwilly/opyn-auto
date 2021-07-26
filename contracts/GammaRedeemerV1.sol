@@ -148,7 +148,15 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderFinished(_orderId, false);
     }
 
+    function withdrawFund(uint256 _amount) public {
+        automator.withdrawFunds(_amount);
+        (bool success, ) = owner().call{value: _amount}("");
+        require(success, "GammaRedeemer::withdrawFunds: Withdraw funds failed");
+    }
+
     function getOrdersLength() public view returns (uint256) {
         return orders.length;
     }
+
+    receive() external payable {}
 }
