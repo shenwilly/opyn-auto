@@ -183,64 +183,29 @@ describe("Scenario: Auto Redeem Put", () => {
   });
 
   describe("auto redeem", async () => {
-    let ethPut: Otoken;
     before(async () => {
-      const now = (await time.latest()).toNumber();
-      expiry = createValidExpiry(now, 7);
-
-      await otokenFactory.createOtoken(
-        weth.address,
-        usdc.address,
-        usdc.address,
-        parseUnits(strikePrice.toString(), strikePriceDecimals),
-        expiry,
-        true
-      );
-      const ethPutAddress = await otokenFactory.getOtoken(
-        weth.address,
-        usdc.address,
-        usdc.address,
-        parseUnits(strikePrice.toString(), strikePriceDecimals),
-        expiry,
-        true
-      );
-
-      ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
-      const vaultId = (
-        await controller.getAccountVaultCounter(sellerAddress)
-      ).add(1);
-      const actions = [
-        getActionOpenVault(sellerAddress, vaultId.toString()),
-        getActionDepositCollateral(
-          sellerAddress,
-          vaultId.toString(),
-          usdc.address,
-          parseUnits(collateralAmount.toString(), usdcDecimals)
-        ),
-        getActionMintShort(
-          sellerAddress,
-          vaultId.toString(),
-          ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        ),
-      ];
-      await controller.connect(seller).operate(actions);
-      await ethPut
-        .connect(seller)
-        .transfer(
-          buyerAddress,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        );
-
-      await ethPut
-        .connect(buyer)
-        .approve(
-          gammaRedeemer.address,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        );
-
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
+    });
+
+    it("should revert if otoken settlement has not been finalised", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+      const taskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrder",
+        [orderId]
+      );
+      await expect(
+        automator.connect(deployer).exec(0, gammaRedeemer.address, taskData)
+      ).to.be.revertedWith("PokeMe: exec: Execution failed");
     });
     it("should redeem otoken", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
@@ -288,6 +253,19 @@ describe("Scenario: Auto Redeem Put", () => {
         .connect(seller)
         .createOrder(ethPut.address, 0, vaultId);
       await setOperator(seller, controller, gammaRedeemer.address, true);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(expiryPriceITM.toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
 
       const balanceBefore = await usdc.balanceOf(sellerAddress);
 
