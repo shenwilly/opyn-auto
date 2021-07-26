@@ -3,12 +3,19 @@ pragma solidity 0.8.0;
 
 interface IGammaRedeemerV1 {
     struct Order {
+        // address of user
         address owner;
+        // address of otoken to redeem
         address otoken;
+        // amount of otoken to redeem
         uint256 amount;
+        // vaultId of vault to settle
         uint256 vaultId;
+        // true if settle vault order, else redeem otoken
         bool isSeller;
+        // convert proceed to ETH, currently disabled
         bool toETH;
+        // true if order is already processed
         bool finished;
     }
 
