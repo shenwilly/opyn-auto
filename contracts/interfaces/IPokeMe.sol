@@ -7,4 +7,6 @@ interface IPokeMe {
 
     function cancelTask(address _taskAddress, bytes calldata _taskData)
         external;
+
+    function withdrawFunds(uint256 _amount) external;
 }
