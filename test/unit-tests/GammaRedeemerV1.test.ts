@@ -13,25 +13,22 @@ import {
   MockERC20__factory,
   GammaRedeemerV1__factory,
   GammaRedeemerV1,
-  GammaOperator,
+  PokeMe__factory,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import {
-  createOtoken,
   getActionDepositCollateral,
   getActionMintShort,
   getActionOpenVault,
   setOperator,
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
-import { ActionType } from "../helpers/types/GammaTypes";
 import { BigNumber } from "@ethersproject/bignumber";
-const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
+const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
-const ZERO_ADDR = constants.ZERO_ADDRESS;
 
 describe("GammaRedeemer", () => {
   let deployer: SignerWithAddress;
@@ -98,11 +95,21 @@ describe("GammaRedeemer", () => {
     whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
 
     // deploy Vault Operator
+    const PokeMeFactory = (await ethers.getContractFactory(
+      "PokeMe",
+      buyer
+    )) as PokeMe__factory;
+    const automator = await PokeMeFactory.deploy(deployerAddress);
+
+    // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
       "GammaRedeemerV1",
       buyer
     )) as GammaRedeemerV1__factory;
-    gammaRedeemer = await GammaRedeemerFactory.deploy(addressBook.address);
+    gammaRedeemer = await GammaRedeemerFactory.deploy(
+      addressBook.address,
+      automator.address
+    );
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 7);
@@ -444,7 +451,11 @@ describe("GammaRedeemer", () => {
           parseUnits(optionAmount.toString(), optionDecimals),
           0
         );
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+
+      const balanceBefore = await usdc.balanceOf(buyerAddress);
+      await gammaRedeemer.connect(deployer).processOrder(orderId);
+      const balanceAfter = await usdc.balanceOf(buyerAddress);
+      expect(balanceAfter).to.be.gt(balanceBefore);
     });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
@@ -463,7 +474,10 @@ describe("GammaRedeemer", () => {
         parseUnits("1", strikePriceDecimals),
         true
       );
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+      const balanceBefore = await usdc.balanceOf(sellerAddress);
+      await gammaRedeemer.connect(deployer).processOrder(orderId);
+      const balanceAfter = await usdc.balanceOf(sellerAddress);
+      expect(balanceAfter).to.be.gt(balanceBefore);
     });
   });
 });
