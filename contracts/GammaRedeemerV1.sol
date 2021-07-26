@@ -2,13 +2,16 @@
 pragma solidity 0.8.0;
 
 import {GammaOperator} from "./GammaOperator.sol";
-import {IGammaRedeemerV1} from "./IGammaRedeemerV1.sol";
+import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
+import {IPokeMe} from "./interfaces/IPokeMe.sol";
 
 /// @author Willy Shen
 /// @title Gamma Automatic Redeemer
 /// @notice An automatic redeemer for Gmma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
+
+    IPokeMe public automator;
 
     /**
      * @notice only automator
@@ -18,7 +21,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         _;
     }
 
-    constructor(address _gammaAddressBook) GammaOperator(_gammaAddressBook) {}
+    constructor(address _gammaAddressBook, address _automator)
+        GammaOperator(_gammaAddressBook)
+    {
+        automator = IPokeMe(_automator);
+    }
 
     /**
      * @notice create automation order
@@ -46,7 +53,13 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.isSeller = _amount == 0;
         orders.push(order);
 
-        // create auto task
+        automator.createTask(
+            address(this),
+            abi.encodeWithSelector(
+                bytes4(keccak256("processOrder(uint256)")),
+                orderId
+            )
+        );
 
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
@@ -67,7 +80,13 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
         orders[_orderId].finished = true;
 
-        // cancel auto task
+        automator.cancelTask(
+            address(this),
+            abi.encodeWithSelector(
+                bytes4(keccak256("processOrder(uint256)")),
+                _orderId
+            )
+        );
 
         emit OrderFinished(_orderId, true);
     }
