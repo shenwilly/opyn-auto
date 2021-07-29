@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.6.10;
 
+// imported so typechain will compile for testing
 import {OtokenFactory} from "gamma-protocol/contracts/core/OtokenFactory.sol";
 import {AddressBook} from "gamma-protocol/contracts/core/AddressBook.sol";
 import {Otoken} from "gamma-protocol/contracts/core/Otoken.sol";

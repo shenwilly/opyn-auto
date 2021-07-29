@@ -92,10 +92,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     /**
-     * @notice check if processing order is allowed and profitable
+     * @notice check if processing order is profitable
      * @dev automator should call this first before calling processOrder
-     * @param _orderId the order Id to be processed
-     * @return true if vault can be settled (writer) / otoken can be redeemed (buyer)
+     * @param _orderId the id of the order to be processed
+     * @return true if settling vault / redeeming returns more than 0 amount
      */
     function shouldProcessOrder(uint256 _orderId)
         public

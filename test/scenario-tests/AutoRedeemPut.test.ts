@@ -205,7 +205,7 @@ describe("Scenario: Auto Redeem Put", () => {
       );
       await expect(
         automator.connect(deployer).exec(0, gammaRedeemer.address, taskData)
-      ).to.be.revertedWith("PokeMe: exec: Execution failed");
+      ).to.be.reverted;
     });
     it("should redeem otoken", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();

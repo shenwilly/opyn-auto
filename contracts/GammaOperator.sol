@@ -90,11 +90,14 @@ contract GammaOperator is Ownable {
         address _otoken,
         uint256 _amount
     ) public view returns (bool) {
-        if (!hasExpiredAndSettlementAllowed(_otoken)) return false;
-
         uint256 actualAmount = getRedeemableAmount(_owner, _otoken, _amount);
-        uint256 payout = getRedeemPayout(_otoken, actualAmount);
-        if (payout == 0) return false;
+        try this.getRedeemPayout(_otoken, actualAmount) returns (
+            uint256 payout
+        ) {
+            if (payout == 0) return false;
+        } catch {
+            return false;
+        }
 
         return true;
     }
@@ -111,44 +114,17 @@ contract GammaOperator is Ownable {
         view
         returns (bool)
     {
-        if (!isValidVaultId(_owner, _vaultId) || !isOperatorOf(_owner))
-            return false;
-
         (
             MarginVault.Vault memory vault,
             uint256 typeVault,
 
         ) = getVaultWithDetails(_owner, _vaultId);
 
-        try this.getVaultOtoken(vault) returns (address otoken) {
-            if (!hasExpiredAndSettlementAllowed(otoken)) return false;
-
-            (uint256 payout, bool isValidVault) = getExcessCollateral(
-                vault,
-                typeVault
-            );
-            if (!isValidVault || payout == 0) return false;
-        } catch {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * @param _otoken otoken address
-     * @return true if otoken has expired and settlement is allowed
-     */
-    function hasExpiredAndSettlementAllowed(address _otoken)
-        public
-        view
-        returns (bool)
-    {
-        bool hasExpired = block.timestamp >= IOtoken(_otoken).expiryTimestamp();
-        if (!hasExpired) return false;
-
-        bool isAllowed = isSettlementAllowed(_otoken);
-        if (!isAllowed) return false;
+        (uint256 payout, bool isValidVault) = getExcessCollateral(
+            vault,
+            typeVault
+        );
+        if (!isValidVault || payout == 0) return false;
 
         return true;
     }
