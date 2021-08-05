@@ -18,6 +18,8 @@ import {
   PokeMe,
   TaskTreasury__factory,
   TaskTreasury,
+  GammaRedeemerResolver,
+  GammaRedeemerResolver__factory,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -54,6 +56,7 @@ describe("Scenario: Auto Redeem Put", () => {
   let oracle: MockOracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
+  let resolver: GammaRedeemerResolver;
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
@@ -131,6 +134,12 @@ describe("Scenario: Auto Redeem Put", () => {
       automator.address
     );
 
+    const ResolverFactory = (await ethers.getContractFactory(
+      "GammaRedeemerResolver",
+      buyer
+    )) as GammaRedeemerResolver__factory;
+    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1);
 
@@ -195,7 +204,7 @@ describe("Scenario: Auto Redeem Put", () => {
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
 
-    await gammaRedeemer.startAutomator();
+    await gammaRedeemer.startAutomator(resolver.address);
   });
 
   describe("auto redeem", async () => {
@@ -230,7 +239,7 @@ describe("Scenario: Auto Redeem Put", () => {
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
 
-      const orderIds = await gammaRedeemer.getProcessableOrders();
+      const orderIds = await resolver.getProcessableOrders();
       expect(orderIds.findIndex((id) => id == orderId) >= 0);
 
       const taskData = gammaRedeemer.interface.encodeFunctionData(
@@ -279,7 +288,7 @@ describe("Scenario: Auto Redeem Put", () => {
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
 
-      const orderIds = await gammaRedeemer.getProcessableOrders();
+      const orderIds = await resolver.getProcessableOrders();
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
         [orderIds]

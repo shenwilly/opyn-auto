@@ -14,6 +14,8 @@ import {
   GammaRedeemerV1__factory,
   GammaRedeemerV1,
   PokeMe__factory,
+  GammaRedeemerResolver__factory,
+  GammaRedeemerResolver,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -47,6 +49,7 @@ describe("GammaRedeemer", () => {
   let oracle: MockOracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
+  let resolver: GammaRedeemerResolver;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -115,6 +118,12 @@ describe("GammaRedeemer", () => {
       automator.address
     );
 
+    const ResolverFactory = (await ethers.getContractFactory(
+      "GammaRedeemerResolver",
+      buyer
+    )) as GammaRedeemerResolver__factory;
+    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 7);
 
@@ -179,7 +188,7 @@ describe("GammaRedeemer", () => {
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
 
-    await gammaRedeemer.connect(deployer).startAutomator();
+    await gammaRedeemer.connect(deployer).startAutomator(resolver.address);
   });
 
   describe("createOrder()", async () => {
