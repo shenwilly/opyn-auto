@@ -12,6 +12,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
     IPokeMe public automator;
+    bool public isAutomatorEnabled;
 
     /**
      * @notice only automator
@@ -25,6 +26,30 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         GammaOperator(_gammaAddressBook)
     {
         automator = IPokeMe(_automator);
+        isAutomatorEnabled = false;
+    }
+
+    function startAutomator() public onlyOwner {
+        require(!isAutomatorEnabled);
+        isAutomatorEnabled = true;
+        automator.createTask(
+            address(this), 
+            bytes4(keccak256("processOrders(uint256[])")),
+            address(this), 
+            abi.encodeWithSelector(bytes4(keccak256("getProcessableOrders()")))
+        );
+    }
+
+    function pauseAutomator() public onlyOwner {
+        require(isAutomatorEnabled);
+        isAutomatorEnabled = false;
+        automator.cancelTask(
+            automator.getTaskId(
+                address(this), 
+                address(this), 
+                bytes4(keccak256("processOrders(uint256[])"))
+            )
+        );
     }
 
     /**
@@ -53,13 +78,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.isSeller = _amount == 0;
         orders.push(order);
 
-        automator.createTask(
-            address(this),
-            abi.encodeWithSelector(
-                bytes4(keccak256("processOrder(uint256)")),
-                orderId
-            )
-        );
 
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
@@ -79,14 +97,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         );
 
         orders[_orderId].finished = true;
-
-        automator.cancelTask(
-            address(this),
-            abi.encodeWithSelector(
-                bytes4(keccak256("processOrder(uint256)")),
-                _orderId
-            )
-        );
 
         emit OrderFinished(_orderId, true);
     }
@@ -149,9 +159,9 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     function withdrawFund(uint256 _amount) public {
-        automator.withdrawFunds(_amount);
-        (bool success, ) = owner().call{value: _amount}("");
-        require(success, "GammaRedeemer::withdrawFunds: Withdraw funds failed");
+        // automator.withdrawFunds(_amount);
+        // (bool success, ) = owner().call{value: _amount}("");
+        // require(success, "GammaRedeemer::withdrawFunds: Withdraw funds failed");
     }
 
     function getOrdersLength() public view returns (uint256) {
