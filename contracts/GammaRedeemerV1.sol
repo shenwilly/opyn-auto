@@ -63,10 +63,15 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         uint256 _amount,
         uint256 _vaultId
     ) public override {
-        require(
-            isWhitelistedOtoken(_otoken),
-            "GammaRedeemer::createOrder: Otoken not whitelisted"
-        );
+        if (_otoken == address(0)) {
+            require(_amount == 0, "GammaRedeemer::createOrder: Amount must be 0 when creating settle order");
+        } else {
+            require(
+                isWhitelistedOtoken(_otoken),
+                "GammaRedeemer::createOrder: Otoken not whitelisted"
+            );
+        }
+
 
         uint256 orderId = orders.length;
 
