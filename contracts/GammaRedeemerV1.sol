@@ -10,6 +10,7 @@ import {IPokeMe} from "./interfaces/IPokeMe.sol";
 /// @notice An automatic redeemer for Gmma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
+    mapping(bytes32 => bool) checks;
 
     IPokeMe public automator;
     bool public isAutomatorEnabled;
@@ -63,15 +64,19 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         uint256 _amount,
         uint256 _vaultId
     ) public override {
+        bytes32 orderhash;
         if (_otoken == address(0)) {
             require(_amount == 0, "GammaRedeemer::createOrder: Amount must be 0 when creating settle order");
+            orderhash = keccak256(abi.encode(msg.sender, _otoken));
         } else {
             require(
                 isWhitelistedOtoken(_otoken),
                 "GammaRedeemer::createOrder: Otoken not whitelisted"
             );
+            orderhash = keccak256(abi.encode(msg.sender, _vaultId));
         }
 
+        require(!checks[orderhash], "GammaRedeemer::createOrder: Order has been created before");
 
         uint256 orderId = orders.length;
 
@@ -83,7 +88,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.isSeller = _amount == 0;
         orders.push(order);
 
-
+        checks[orderhash] = true;
+        
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
 
@@ -119,6 +125,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         returns (bool)
     {
         Order memory order = orders[_orderId];
+        if (order.finished) return false;
 
         if (order.isSeller) {
             bool shouldSettle = shouldSettleVault(order.owner, order.vaultId);
@@ -133,6 +140,25 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
 
         return true;
+    }
+
+    function getProcessableOrders() public view returns (uint256[] memory) {
+        uint256 executableOrderTotal;
+        for (uint256 i = 0; i < orders.length; i++) {
+            if (shouldProcessOrder(i)) {
+                executableOrderTotal++;
+            }
+        }
+
+        uint256 counter;
+        uint256[] memory orderIds = new uint256[](executableOrderTotal);
+        for (uint256 i = 0; i < orders.length; i++) {
+            if (shouldProcessOrder(i)) {
+                orderIds[counter] = i;
+                counter++;
+            }
+        }
+        return orderIds;
     }
 
     /**
@@ -161,6 +187,12 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
 
         emit OrderFinished(_orderId, false);
+    }
+
+    function processOrders(uint256[] calldata _orderIds) public onlyAuthorized {
+        for (uint256 i = 0; i < _orderIds.length; i++) {
+            processOrder(_orderIds[i]);
+        }
     }
 
     function withdrawFund(uint256 _amount) public {
