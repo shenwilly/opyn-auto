@@ -10,7 +10,6 @@ import {IPokeMe} from "./interfaces/IPokeMe.sol";
 /// @notice An automatic redeemer for Gmma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
-    mapping(bytes32 => bool) checks;
 
     IPokeMe public automator;
     bool public isAutomatorEnabled;
@@ -34,9 +33,9 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         require(!isAutomatorEnabled);
         isAutomatorEnabled = true;
         automator.createTask(
-            address(this), 
+            address(this),
             bytes4(keccak256("processOrders(uint256[])")),
-            address(this), 
+            address(this),
             abi.encodeWithSelector(bytes4(keccak256("getProcessableOrders()")))
         );
     }
@@ -46,8 +45,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         isAutomatorEnabled = false;
         automator.cancelTask(
             automator.getTaskId(
-                address(this), 
-                address(this), 
+                address(this),
+                address(this),
                 bytes4(keccak256("processOrders(uint256[])"))
             )
         );
@@ -64,19 +63,17 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         uint256 _amount,
         uint256 _vaultId
     ) public override {
-        bytes32 orderhash;
         if (_otoken == address(0)) {
-            require(_amount == 0, "GammaRedeemer::createOrder: Amount must be 0 when creating settle order");
-            orderhash = keccak256(abi.encode(msg.sender, _otoken));
+            require(
+                _amount == 0,
+                "GammaRedeemer::createOrder: Amount must be 0 when creating settle order"
+            );
         } else {
             require(
                 isWhitelistedOtoken(_otoken),
                 "GammaRedeemer::createOrder: Otoken not whitelisted"
             );
-            orderhash = keccak256(abi.encode(msg.sender, _vaultId));
         }
-
-        require(!checks[orderhash], "GammaRedeemer::createOrder: Order has been created before");
 
         uint256 orderId = orders.length;
 
@@ -88,8 +85,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.isSeller = _amount == 0;
         orders.push(order);
 
-        checks[orderhash] = true;
-        
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
 
@@ -98,17 +93,17 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @param _orderId the order Id to be cancelled
      */
     function cancelOrder(uint256 _orderId) public override {
+        Order storage order = orders[_orderId];
         require(
-            orders[_orderId].owner == msg.sender,
+            order.owner == msg.sender,
             "GammaRedeemer::cancelOrder: Sender is not order owner"
         );
         require(
-            !orders[_orderId].finished,
+            !order.finished,
             "GammaRedeemer::cancelOrder: Order is already finished"
         );
 
-        orders[_orderId].finished = true;
-
+        order.finished = true;
         emit OrderFinished(_orderId, true);
     }
 
@@ -143,19 +138,65 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     function getProcessableOrders() public view returns (uint256[] memory) {
+        bytes32[] memory preCheckHashes = new bytes32[](orders.length);
         uint256 executableOrderTotal;
         for (uint256 i = 0; i < orders.length; i++) {
             if (shouldProcessOrder(i)) {
-                executableOrderTotal++;
+                // Only proceess duplicate orders one at a time
+                bytes32 orderHash;
+                if (orders[i].isSeller) {
+                    orderHash = keccak256(
+                        abi.encode(orders[i].owner, orders[i].vaultId)
+                    );
+                } else {
+                    orderHash = keccak256(
+                        abi.encode(orders[i].owner, orders[i].otoken)
+                    );
+                }
+
+                bool sameOrderType;
+                for (uint256 j = 0; j < preCheckHashes.length; j++) {
+                    if (preCheckHashes[j] == orderHash) {
+                        sameOrderType = true;
+                        break;
+                    }
+                }
+
+                if (!sameOrderType) {
+                    preCheckHashes[i] = orderHash;
+                    executableOrderTotal++;
+                }
             }
         }
 
+        bytes32[] memory postCheckHashes = new bytes32[](orders.length);
         uint256 counter;
         uint256[] memory orderIds = new uint256[](executableOrderTotal);
         for (uint256 i = 0; i < orders.length; i++) {
             if (shouldProcessOrder(i)) {
-                orderIds[counter] = i;
-                counter++;
+                bytes32 orderHash;
+                if (orders[i].isSeller) {
+                    orderHash = keccak256(
+                        abi.encode(orders[i].owner, orders[i].vaultId)
+                    );
+                } else {
+                    orderHash = keccak256(
+                        abi.encode(orders[i].owner, orders[i].otoken)
+                    );
+                }
+
+                bool sameOrderType;
+                for (uint256 j = 0; j < postCheckHashes.length; j++) {
+                    if (postCheckHashes[j] == orderHash) {
+                        sameOrderType = true;
+                        break;
+                    }
+                }
+
+                if (!sameOrderType) {
+                    orderIds[counter] = i;
+                    counter++;
+                }
             }
         }
         return orderIds;
