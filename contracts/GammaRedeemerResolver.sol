@@ -14,6 +14,11 @@ contract GammaRedeemerResolver is IResolver {
         redeemer = IGammaRedeemerV1(_redeemer);
     }
 
+    // check if order can be processed without a revert
+    function canProcessOrder(uint256 _orderId) public view returns (bool) {
+        return true;
+    }
+
     function getProcessableOrders()
         public
         view
@@ -22,67 +27,61 @@ contract GammaRedeemerResolver is IResolver {
     {
         IGammaRedeemerV1.Order[] memory orders = redeemer.getOrders();
 
+        // Only proceess duplicate orders one at a time
         bytes32[] memory preCheckHashes = new bytes32[](orders.length);
-        uint256 executableOrderTotal;
+        bytes32[] memory postCheckHashes = new bytes32[](orders.length);
+
+        uint256 orderIdLength;
         for (uint256 i = 0; i < orders.length; i++) {
-            if (redeemer.shouldProcessOrder(i)) {
-                // Only proceess duplicate orders one at a time
-                bytes32 orderHash;
-                if (orders[i].isSeller) {
-                    orderHash = keccak256(
-                        abi.encode(orders[i].owner, orders[i].vaultId)
-                    );
-                } else {
-                    orderHash = keccak256(
-                        abi.encode(orders[i].owner, orders[i].otoken)
-                    );
-                }
-
-                bool sameOrderType;
-                for (uint256 j = 0; j < preCheckHashes.length; j++) {
-                    if (preCheckHashes[j] == orderHash) {
-                        sameOrderType = true;
-                        break;
-                    }
-                }
-
-                if (!sameOrderType) {
-                    preCheckHashes[i] = orderHash;
-                    executableOrderTotal++;
-                }
+            if (
+                redeemer.shouldProcessOrder(i) &&
+                canProcessOrder(i) &&
+                !containDuplicateOrderType(orders[i], preCheckHashes)
+            ) {
+                preCheckHashes[i] = getOrderHash(orders[i]);
+                orderIdLength++;
             }
         }
 
-        bytes32[] memory postCheckHashes = new bytes32[](orders.length);
         uint256 counter;
-        uint256[] memory orderIds = new uint256[](executableOrderTotal);
+        uint256[] memory orderIds = new uint256[](orderIdLength);
         for (uint256 i = 0; i < orders.length; i++) {
-            if (redeemer.shouldProcessOrder(i)) {
-                bytes32 orderHash;
-                if (orders[i].isSeller) {
-                    orderHash = keccak256(
-                        abi.encode(orders[i].owner, orders[i].vaultId)
-                    );
-                } else {
-                    orderHash = keccak256(
-                        abi.encode(orders[i].owner, orders[i].otoken)
-                    );
-                }
-
-                bool sameOrderType;
-                for (uint256 j = 0; j < postCheckHashes.length; j++) {
-                    if (postCheckHashes[j] == orderHash) {
-                        sameOrderType = true;
-                        break;
-                    }
-                }
-
-                if (!sameOrderType) {
-                    orderIds[counter] = i;
-                    counter++;
-                }
+            if (
+                redeemer.shouldProcessOrder(i) &&
+                canProcessOrder(i) &&
+                !containDuplicateOrderType(orders[i], postCheckHashes)
+            ) {
+                postCheckHashes[i] = getOrderHash(orders[i]);
+                orderIds[counter] = i;
+                counter++;
             }
         }
         return orderIds;
+    }
+
+    function containDuplicateOrderType(
+        IGammaRedeemerV1.Order memory order,
+        bytes32[] memory hashes
+    ) public pure returns (bool containDuplicate) {
+        bytes32 orderHash = getOrderHash(order);
+
+        for (uint256 j = 0; j < hashes.length; j++) {
+            if (hashes[j] == orderHash) {
+                containDuplicate = true;
+                break;
+            }
+        }
+    }
+
+    function getOrderHash(IGammaRedeemerV1.Order memory order)
+        public
+        pure
+        returns (bytes32 orderHash)
+    {
+        if (order.isSeller) {
+            orderHash = keccak256(abi.encode(order.owner, order.vaultId));
+        } else {
+            orderHash = keccak256(abi.encode(order.owner, order.otoken));
+        }
     }
 }

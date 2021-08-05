@@ -8,5 +8,3 @@ interface ITaskTreasury {
         uint256 _amount
     ) external;
 }
-
-
