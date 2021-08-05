@@ -115,9 +115,12 @@ describe("Scenario: Auto Redeem Put", () => {
       "PokeMe",
       buyer
     )) as PokeMe__factory;
-    automator = await PokeMeFactory.deploy(deployerAddress, automatorTreasury.address);
+    automator = await PokeMeFactory.deploy(
+      deployerAddress,
+      automatorTreasury.address
+    );
     await automatorTreasury.addWhitelistedService(automator.address);
-    
+
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
       "GammaRedeemerV1",
@@ -191,7 +194,7 @@ describe("Scenario: Auto Redeem Put", () => {
         parseUnits(optionAmount.toString(), optionDecimals)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
-    
+
     await gammaRedeemer.startAutomator();
   });
 
@@ -229,7 +232,7 @@ describe("Scenario: Auto Redeem Put", () => {
 
       const orderIds = await gammaRedeemer.getProcessableOrders();
       expect(orderIds.findIndex((id) => id == orderId) >= 0);
-      
+
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
         [[orderId]]
@@ -237,8 +240,14 @@ describe("Scenario: Auto Redeem Put", () => {
 
       await automator
         .connect(deployer)
-        .exec(0, ETH_TOKEN_ADDRESS, gammaRedeemer.address, gammaRedeemer.address, taskData);
-        // .exec(0, gammaRedeemer.address, taskData);
+        .exec(
+          0,
+          ETH_TOKEN_ADDRESS,
+          gammaRedeemer.address,
+          gammaRedeemer.address,
+          taskData
+        );
+      // .exec(0, gammaRedeemer.address, taskData);
 
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
@@ -275,9 +284,16 @@ describe("Scenario: Auto Redeem Put", () => {
         "processOrders",
         [orderIds]
       );
+
       await automator
         .connect(deployer)
-        .exec(0, ETH_TOKEN_ADDRESS, gammaRedeemer.address, gammaRedeemer.address, taskData);
+        .exec(
+          0,
+          ETH_TOKEN_ADDRESS,
+          gammaRedeemer.address,
+          gammaRedeemer.address,
+          taskData
+        );
 
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
