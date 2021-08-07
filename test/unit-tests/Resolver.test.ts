@@ -141,7 +141,7 @@ describe("Gamma Redeemer Resolver", () => {
     resolver = await ResolverFactory.deploy(gammaRedeemer.address);
 
     const now = (await time.latest()).toNumber();
-    expiry = createValidExpiry(now, 1);
+    expiry = createValidExpiry(now, 1000);
 
     await otokenFactory.createOtoken(
       weth.address,
@@ -208,18 +208,122 @@ describe("Gamma Redeemer Resolver", () => {
   });
 
   describe("canProcessOrder()", async () => {
-    it("should return false if order could be processed", async () => {
-      describe("buyer", () => {
-        it("should return false if otoken has not expired & not settled", async () => {});
-      });
-      describe("seller", () => {
-        it("should return false if vault is not valid", async () => {});
-        it("should return false if redeemer is not operator", async () => {});
-        it("should return false if vault otoken has not expired & not settled", async () => {});
-      });
+    it("should return false if otoken has not expired & not settled", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      expect(
+        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+      ).to.be.eq(false);
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
-    it("should return true if buy order could be processed", async () => {});
-    it("should return true if sell order could be processed", async () => {});
+    it("should return false if vault is not valid", async () => {
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter.add(1));
+
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return false if redeemer is not operator", async () => {
+      await setOperator(seller, controller, gammaRedeemer.address, false);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter);
+
+      expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(false);
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return false if vault otoken has not expired & not settled", async () => {
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter);
+
+      const [vault] = await gammaRedeemer.getVaultWithDetails(
+        sellerAddress,
+        vaultCounter
+      );
+      expect(vault[0][0]).to.be.eq(ethPut.address);
+      expect(
+        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+      ).to.be.eq(false);
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return true if buy order could be processed", async () => {
+      console.log("?");
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      expect(
+        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+      ).to.be.eq(true);
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(true);
+    });
+    it("should return true if sell order could be processed", async () => {
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter);
+
+      const [vault] = await gammaRedeemer.getVaultWithDetails(
+        sellerAddress,
+        vaultCounter
+      );
+      expect(vault[0][0]).to.be.eq(ethPut.address);
+      expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(true);
+      expect(
+        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+      ).to.be.eq(true);
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(true);
+    });
   });
 
   describe("containDuplicateOrderType()", async () => {
