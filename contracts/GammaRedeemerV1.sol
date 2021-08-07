@@ -186,5 +186,14 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         return orders;
     }
 
+    function getOrder(uint256 _orderId)
+        public
+        view
+        override
+        returns (Order memory)
+    {
+        return orders[_orderId];
+    }
+
     receive() external payable {}
 }

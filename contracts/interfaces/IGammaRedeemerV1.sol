@@ -41,4 +41,6 @@ interface IGammaRedeemerV1 {
     function getOrdersLength() external view returns (uint256);
 
     function getOrders() external view returns (Order[] memory);
+
+    function getOrder(uint256 _orderId) external view returns (Order memory);
 }
