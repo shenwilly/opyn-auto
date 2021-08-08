@@ -606,17 +606,17 @@ describe("Gamma Redeemer Resolver", () => {
       expect(processableOrders.length).to.be.eq(2);
       expect(
         processableOrders.findIndex(
-          (orderId) => orderId.toString() === orderId1.toString()
+          (orderId: BigNumber) => orderId.toString() === orderId1.toString()
         )
       ).to.be.gte(0);
       expect(
         processableOrders.findIndex(
-          (orderId) => orderId.toString() === orderId2.toString()
+          (orderId: BigNumber) => orderId.toString() === orderId2.toString()
         )
       ).to.be.lt(0);
       expect(
         processableOrders.findIndex(
-          (orderId) => orderId.toString() === orderId3.toString()
+          (orderId: BigNumber) => orderId.toString() === orderId3.toString()
         )
       ).to.be.gte(0);
     });
