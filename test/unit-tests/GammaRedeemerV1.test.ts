@@ -17,10 +17,11 @@ import {
   GammaRedeemerResolver__factory,
   GammaRedeemerResolver,
   TaskTreasury__factory,
+  TaskTreasury,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { parseUnits } from "ethers/lib/utils";
+import { parseEther, parseUnits } from "ethers/lib/utils";
 import {
   getActionDepositCollateral,
   getActionMintShort,
@@ -30,6 +31,7 @@ import {
 } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
 import { constants } from "ethers";
+import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -52,6 +54,7 @@ describe("GammaRedeemer", () => {
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
   let resolver: GammaRedeemerResolver;
+  let automatorTreasury: TaskTreasury;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -114,7 +117,7 @@ describe("GammaRedeemer", () => {
       "TaskTreasury",
       buyer
     )) as TaskTreasury__factory;
-    const automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
+    automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
 
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
@@ -513,25 +516,36 @@ describe("GammaRedeemer", () => {
   });
 
   describe("withdrawFunds()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    const amount = parseEther("1");
+    before(async () => {
+      await automatorTreasury.depositFunds(
+        gammaRedeemer.address,
+        ETH_TOKEN_ADDRESS,
+        0,
+        {
+          value: amount,
+        }
+      );
+    });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).withdrawFund(ETH_TOKEN_ADDRESS, amount),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should withdraw funds from treasury", async () => {
+      const ethBalanceBefore = await ethers.provider.getBalance(
+        gammaRedeemer.address
+      );
+      await gammaRedeemer
+        .connect(deployer)
+        .withdrawFund(ETH_TOKEN_ADDRESS, amount);
+      const ethBalanceAfter = await ethers.provider.getBalance(
+        gammaRedeemer.address
+      );
+
+      expect(ethBalanceAfter.sub(ethBalanceBefore)).to.be.eq(amount);
+    });
   });
 
   describe("setAutomator()", async () => {

@@ -190,7 +190,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
     }
 
-    function withdrawFund(address _token, uint256 _amount) public {
+    function withdrawFund(address _token, uint256 _amount) public onlyOwner {
         automatorTreasury.withdrawFunds(payable(this), _token, _amount);
     }
 
