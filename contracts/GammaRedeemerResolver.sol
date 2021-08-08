@@ -16,7 +16,11 @@ contract GammaRedeemerResolver is IResolver {
         redeemer = _redeemer;
     }
 
-    // check if order can be processed without reverting
+    /**
+     * @notice return if a specific order can be processed
+     * @param _orderId id of order
+     * @return true if order can be proceseed without a revert
+     */
     function canProcessOrder(uint256 _orderId) public view returns (bool) {
         IGammaRedeemerV1.Order memory order = IGammaRedeemerV1(redeemer)
             .getOrder(_orderId);
@@ -64,6 +68,14 @@ contract GammaRedeemerResolver is IResolver {
         return true;
     }
 
+    /**
+     * @notice return list of processable orderIds
+     * @return an array of orderIds available to process
+     * @dev order is processable if:
+     * 1. it is profitable to process (shouldProcessOrder)
+     * 2. it can be processed without reverting (canProcessOrder)
+     * 3. it is not included yet (for same type of orders, process it one at a time)
+     */
     function getProcessableOrders()
         public
         view
@@ -105,6 +117,12 @@ contract GammaRedeemerResolver is IResolver {
         return orderIds;
     }
 
+    /**
+     * @notice return if order is already included
+     * @param order struct to check
+     * @param hashes list of hashed orders
+     * @return containDuplicate if hashes already contain a same order type.
+     */
     function containDuplicateOrderType(
         IGammaRedeemerV1.Order memory order,
         bytes32[] memory hashes
@@ -119,6 +137,11 @@ contract GammaRedeemerResolver is IResolver {
         }
     }
 
+    /**
+     * @notice return hash of the order
+     * @param order struct to hash
+     * @return orderHash hash depending on the order's type
+     */
     function getOrderHash(IGammaRedeemerV1.Order memory order)
         public
         pure
