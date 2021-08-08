@@ -4,6 +4,7 @@ pragma solidity 0.8.0;
 import {GammaOperator} from "./GammaOperator.sol";
 import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
+import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
 import {IResolver} from "./interfaces/IResolver.sol";
 
 /// @author Willy Shen
@@ -13,20 +14,27 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
     IPokeMe public automator;
+    ITaskTreasury public automatorTreasury;
     bool public isAutomatorEnabled;
 
     /**
      * @notice only automator
      */
     modifier onlyAuthorized() {
-        // msg.sender == executor
+        require(
+            msg.sender == address(automator) || msg.sender == owner(),
+            "GammaRedeemer::onlyAuthorized: Only automator or owner"
+        );
         _;
     }
 
-    constructor(address _gammaAddressBook, address _automator)
-        GammaOperator(_gammaAddressBook)
-    {
+    constructor(
+        address _gammaAddressBook,
+        address _automator,
+        address _automatorTreasury
+    ) GammaOperator(_gammaAddressBook) {
         automator = IPokeMe(_automator);
+        automatorTreasury = ITaskTreasury(_automatorTreasury);
         isAutomatorEnabled = false;
     }
 
@@ -172,10 +180,16 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
     }
 
-    function withdrawFund(uint256 _amount) public {
-        // automator.withdrawFunds(_amount);
-        // (bool success, ) = owner().call{value: _amount}("");
-        // require(success, "GammaRedeemer::withdrawFunds: Withdraw funds failed");
+    function withdrawFund(address _token, uint256 _amount) public {
+        automatorTreasury.withdrawFunds(payable(this), _token, _amount);
+    }
+
+    function setAutomator(address _automator) public onlyOwner {
+        automator = IPokeMe(_automator);
+    }
+
+    function setAutomatorTreasury(address _automatorTreasury) public onlyOwner {
+        automatorTreasury = ITaskTreasury(_automatorTreasury);
     }
 
     function getOrdersLength() public view override returns (uint256) {

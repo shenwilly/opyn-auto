@@ -131,7 +131,8 @@ describe("Scenario: Auto Redeem Put", () => {
     )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(
       addressBook.address,
-      automator.address
+      automator.address,
+      automatorTreasury.address
     );
 
     const ResolverFactory = (await ethers.getContractFactory(

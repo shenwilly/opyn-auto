@@ -16,6 +16,7 @@ import {
   PokeMe__factory,
   GammaRedeemerResolver__factory,
   GammaRedeemerResolver,
+  TaskTreasury__factory,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -108,6 +109,12 @@ describe("GammaRedeemer", () => {
       deployerAddress
     );
 
+    const TaskTreasuryFactory = (await ethers.getContractFactory(
+      "TaskTreasury",
+      buyer
+    )) as TaskTreasury__factory;
+    const automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
+
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
       "GammaRedeemerV1",
@@ -115,7 +122,8 @@ describe("GammaRedeemer", () => {
     )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(
       addressBook.address,
-      automator.address
+      automator.address,
+      automatorTreasury.address
     );
 
     const ResolverFactory = (await ethers.getContractFactory(

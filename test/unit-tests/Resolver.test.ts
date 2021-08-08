@@ -92,7 +92,7 @@ describe("Gamma Redeemer Resolver", () => {
       marginPool,
       calculator,
       controller,
-    ] = await setupGammaContracts();
+    ] = await setupGammaContracts(deployer);
 
     // setup usdc and weth
     const mockERC20Factory = (await ethers.getContractFactory(
@@ -109,14 +109,14 @@ describe("Gamma Redeemer Resolver", () => {
 
     const TaskTreasuryFactory = (await ethers.getContractFactory(
       "TaskTreasury",
-      buyer
+      deployer
     )) as TaskTreasury__factory;
     automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
 
     // deploy Vault Operator
     const PokeMeFactory = (await ethers.getContractFactory(
       "PokeMe",
-      buyer
+      deployer
     )) as PokeMe__factory;
     automator = await PokeMeFactory.deploy(
       deployerAddress,
@@ -127,16 +127,17 @@ describe("Gamma Redeemer Resolver", () => {
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
       "GammaRedeemerV1",
-      buyer
+      deployer
     )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(
       addressBook.address,
-      automator.address
+      automator.address,
+      automatorTreasury.address
     );
 
     const ResolverFactory = (await ethers.getContractFactory(
       "GammaRedeemerResolver",
-      buyer
+      deployer
     )) as GammaRedeemerResolver__factory;
     resolver = await ResolverFactory.deploy(gammaRedeemer.address);
   });
