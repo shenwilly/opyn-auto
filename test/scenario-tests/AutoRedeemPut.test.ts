@@ -35,10 +35,11 @@ import {
 import { ActionType } from "../helpers/types/GammaTypes";
 import { BigNumber } from "@ethersproject/bignumber";
 import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
-const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
+import { constants } from "ethers/lib/ethers";
+const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
-const ZERO_ADDR = constants.ZERO_ADDRESS;
+const ZERO_ADDR = constants.AddressZero;
 
 describe("Scenario: Auto Redeem Put", () => {
   let deployer: SignerWithAddress;
@@ -267,9 +268,7 @@ describe("Scenario: Auto Redeem Put", () => {
     it("should settle vault", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ethPut.address, 0, vaultId);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
       await setOperator(seller, controller, gammaRedeemer.address, true);
 
       await oracle.setExpiryPriceFinalizedAllPeiodOver(

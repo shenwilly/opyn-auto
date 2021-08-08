@@ -26,12 +26,13 @@ import {
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
+import { constants } from "ethers/lib/ethers";
 
 const { expect } = chai;
-const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
-const ZERO_ADDR = constants.ZERO_ADDRESS;
+const { time, expectRevert } = require("@openzeppelin/test-helpers");
+const ZERO_ADDR = constants.AddressZero;
 
-describe("GammaRedeemer", () => {
+describe("GammaOperator", () => {
   let deployer: SignerWithAddress;
   let buyer: SignerWithAddress;
   let seller: SignerWithAddress;
@@ -166,7 +167,7 @@ describe("GammaRedeemer", () => {
 
       await gammaOperator
         .connect(buyer)
-        .redeem(buyerAddress, ethPut.address, shortOptionAmount);
+        .redeem(buyerAddress, ethPut.address, shortOptionAmount, 0);
 
       const usdcBalanceAfter = await usdc.balanceOf(buyerAddress);
       const optionBalanceAfter = await ethPut.balanceOf(buyerAddress);
@@ -177,6 +178,8 @@ describe("GammaRedeemer", () => {
 
       expect(optionBalanceBefore).to.be.gt(0);
       expect(optionBalanceAfter).to.be.eq(0);
+
+      // TODO: with Fee
     });
   });
 
@@ -238,13 +241,15 @@ describe("GammaRedeemer", () => {
       const usdcBalanceBefore = await usdc.balanceOf(sellerAddress);
       const proceed = await controller.getProceed(sellerAddress, vaultId);
 
-      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId);
+      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId, 0);
 
       const usdcBalanceAfter = await usdc.balanceOf(sellerAddress);
 
       expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
       const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
       expect(difference).to.be.eq(proceed);
+
+      // TODO: with Fee
     });
   });
 
@@ -1020,5 +1025,27 @@ describe("GammaRedeemer", () => {
       expect(await gammaOperator.whitelist()).to.be.eq(newWhitelist.address);
       expect(await gammaOperator.calculator()).to.be.eq(newCalculator.address);
     });
+  });
+
+  describe("harvest()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
   });
 });

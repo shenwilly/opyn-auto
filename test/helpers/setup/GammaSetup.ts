@@ -1,5 +1,10 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { BigNumber, BigNumberish, ContractFactory } from "ethers/lib/ethers";
+import {
+  BigNumber,
+  BigNumberish,
+  constants,
+  ContractFactory,
+} from "ethers/lib/ethers";
 import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -13,8 +18,7 @@ import {
   Otoken,
 } from "../../../typechain";
 import { ActionArgs, ActionType } from "../types/GammaTypes";
-const { constants } = require("@openzeppelin/test-helpers");
-const ZERO_ADDR = constants.ZERO_ADDRESS;
+const ZERO_ADDR = constants.AddressZero;
 
 type GammaContracts = [
   AddressBook,

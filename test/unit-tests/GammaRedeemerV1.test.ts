@@ -33,6 +33,7 @@ import { constants } from "ethers";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
+const ZERO_ADDR = constants.AddressZero;
 
 describe("GammaRedeemer", () => {
   let deployer: SignerWithAddress;
@@ -234,6 +235,7 @@ describe("GammaRedeemer", () => {
         orderVaultId,
         orderIsSeller,
         orderToEth,
+        orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
       expect(orderOwner).to.be.eq(buyerAddress);
@@ -244,13 +246,14 @@ describe("GammaRedeemer", () => {
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
       expect(orderToEth).to.be.eq(false);
+      expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
     it("should create seller order", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
         .connect(seller)
-        .createOrder(ethPut.address, 0, 1);
+        .createOrder(ZERO_ADDR, 0, 1);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderCreated"
@@ -264,14 +267,16 @@ describe("GammaRedeemer", () => {
         orderVaultId,
         orderIsSeller,
         orderToEth,
+        orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
       expect(orderOwner).to.be.eq(sellerAddress);
-      // expect(orderOtoken).to.be.eq(ethPut.address);
+      expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
       expect(orderVaultId).to.be.eq(1);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToEth).to.be.eq(false);
+      expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
   });
@@ -280,9 +285,7 @@ describe("GammaRedeemer", () => {
     let orderId: BigNumber;
     before(async () => {
       orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(constants.AddressZero, 0, 10);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
     });
     it("should revert if sender is not owner", async () => {
       await expectRevert(
@@ -300,9 +303,7 @@ describe("GammaRedeemer", () => {
     });
     it("should cancel order", async () => {
       const newOrderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(constants.AddressZero, 0, 10);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
 
       const tx = await gammaRedeemer.connect(seller).cancelOrder(newOrderId);
       const receipt = await tx.wait();
@@ -374,9 +375,7 @@ describe("GammaRedeemer", () => {
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
 
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ethPut.address, 0, vaultId);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
     });
@@ -491,7 +490,7 @@ describe("GammaRedeemer", () => {
     });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 1);
 
       await setOperator(seller, controller, gammaRedeemer.address, true);
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
@@ -511,5 +510,115 @@ describe("GammaRedeemer", () => {
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
+  });
+
+  describe("withdrawFunds()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
+  });
+
+  describe("setAutomator()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
+  });
+
+  describe("setAutomatorTreasury()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
+  });
+
+  describe("setRedeemFee()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
+  });
+
+  describe("setSettleFee()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should revert if new address is zero", async () => {
+    //   await expectRevert(
+    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
+    //     "GammaOperator::setAddressBook: Address must not be zero"
+    //   );
+    // });
+    // it("should set new addressBook", async () => {
+    //   const oldAddressBook = await gammaOperator.addressBook();
+    //   const newAddressBook = buyerAddress;
+    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
+    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
+    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
+    // });
   });
 });

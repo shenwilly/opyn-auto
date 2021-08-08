@@ -17,6 +17,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     ITaskTreasury public automatorTreasury;
     bool public isAutomatorEnabled;
 
+    // fee in 1/10.000: 1% = 100, 0.01% = 1
+    uint256 public redeemFee = 50;
+    uint256 public settleFee = 10;
+
     /**
      * @notice only automator
      */
@@ -72,16 +76,21 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         uint256 _amount,
         uint256 _vaultId
     ) public override {
+        uint256 fee;
+        bool isSeller;
         if (_otoken == address(0)) {
             require(
                 _amount == 0,
-                "GammaRedeemer::createOrder: Amount must be 0 when creating settle order"
+                "GammaRedeemer::createOrder: Amount must be 0 when creating settlement order"
             );
+            fee = settleFee;
+            isSeller = true;
         } else {
             require(
                 isWhitelistedOtoken(_otoken),
                 "GammaRedeemer::createOrder: Otoken not whitelisted"
             );
+            fee = redeemFee;
         }
 
         uint256 orderId = orders.length;
@@ -91,7 +100,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.otoken = _otoken;
         order.amount = _amount;
         order.vaultId = _vaultId;
-        order.isSeller = _amount == 0;
+        order.isSeller = isSeller;
+        order.fee = fee;
         orders.push(order);
 
         emit OrderCreated(orderId, msg.sender, _otoken);
@@ -166,9 +176,9 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
         // process
         if (order.isSeller) {
-            settleVault(order.owner, order.vaultId);
+            settleVault(order.owner, order.vaultId, order.fee);
         } else {
-            redeemOtoken(order.owner, order.otoken, order.amount);
+            redeemOtoken(order.owner, order.otoken, order.amount, order.fee);
         }
 
         emit OrderFinished(_orderId, false);
@@ -190,6 +200,14 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     function setAutomatorTreasury(address _automatorTreasury) public onlyOwner {
         automatorTreasury = ITaskTreasury(_automatorTreasury);
+    }
+
+    function setRedeemFee(uint256 _redeemFee) public onlyOwner {
+        redeemFee = _redeemFee;
+    }
+
+    function setSettleFee(uint256 _settleFee) public onlyOwner {
+        settleFee = _settleFee;
     }
 
     function getOrdersLength() public view override returns (uint256) {
