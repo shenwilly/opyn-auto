@@ -345,8 +345,86 @@ describe("Gamma Redeemer Resolver", () => {
   });
 
   describe("containDuplicateOrderType()", async () => {
-    it("should return true if there is duplicate", async () => {});
-    it("should return false if there is no duplicate", async () => {});
+    let hashes: string[];
+    let address: string;
+    before(async () => {
+      address = ethPut.address;
+      const hash1 = await resolver.getOrderHash({
+        owner: buyerAddress,
+        otoken: address,
+        amount: BigNumber.from(1000),
+        vaultId: BigNumber.from(0),
+        isSeller: false,
+        toETH: false,
+        finished: false,
+      });
+      const hash2 = await resolver.getOrderHash({
+        owner: sellerAddress,
+        otoken: ZERO_ADDR,
+        amount: BigNumber.from(0),
+        vaultId: BigNumber.from(1),
+        isSeller: true,
+        toETH: false,
+        finished: false,
+      });
+
+      hashes = [hash1, hash2];
+    });
+    it("should return true if there is duplicate", async () => {
+      const buyOrder = {
+        owner: buyerAddress,
+        otoken: address,
+        amount: BigNumber.from(1),
+        vaultId: BigNumber.from(0),
+        isSeller: false,
+        toETH: false,
+        finished: false,
+      };
+      const hash = await resolver.getOrderHash(buyOrder);
+      expect(
+        await resolver.containDuplicateOrderType(buyOrder, hashes)
+      ).to.be.eq(true);
+
+      const sellOrder = {
+        owner: sellerAddress,
+        otoken: ZERO_ADDR,
+        amount: BigNumber.from(0),
+        vaultId: BigNumber.from(1),
+        isSeller: true,
+        toETH: false,
+        finished: false,
+      };
+      expect(
+        await resolver.containDuplicateOrderType(sellOrder, hashes)
+      ).to.be.eq(true);
+    });
+    it("should return false if there is no duplicate", async () => {
+      const buyOrder = {
+        owner: buyerAddress,
+        otoken: ZERO_ADDR,
+        amount: BigNumber.from(1),
+        vaultId: BigNumber.from(0),
+        isSeller: false,
+        toETH: false,
+        finished: false,
+      };
+      expect(
+        await resolver.containDuplicateOrderType(buyOrder, hashes)
+      ).to.be.eq(false);
+
+      const sellOrder = {
+        owner: sellerAddress,
+        otoken: ZERO_ADDR,
+        amount: BigNumber.from(0),
+        vaultId: BigNumber.from(3),
+        isSeller: true,
+        toETH: false,
+        finished: false,
+      };
+      expect(
+        await resolver.containDuplicateOrderType(sellOrder, hashes)
+      ).to.be.eq(false);
+    });
   });
 
   describe("getOrderHash()", async () => {
