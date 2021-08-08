@@ -476,9 +476,149 @@ describe("Gamma Redeemer Resolver", () => {
   });
 
   describe("getProcessableOrders()", async () => {
-    it("should return empty list if no order is processable", async () => {});
-    it("should skip finished orders", async () => {});
-    it("should skip same order types", async () => {});
-    it("should return list of processable orders", async () => {});
+    it("should return empty list if no order is processable", async () => {
+      expect(await gammaRedeemer.getOrdersLength()).to.be.eq(0);
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      const processableOrders = await resolver.getProcessableOrders();
+      expect(processableOrders.length).to.be.eq(0);
+    });
+    it("should skip finished orders", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const processableOrdersBefore = await resolver.getProcessableOrders();
+      expect(processableOrdersBefore.length).to.be.eq(1);
+
+      await gammaRedeemer.connect(deployer).processOrder(orderId);
+
+      const processableOrdersAfter = await resolver.getProcessableOrders();
+      expect(processableOrdersAfter.length).to.be.eq(0);
+    });
+    it("should skip same order types", async () => {
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const processableOrders = await resolver.getProcessableOrders();
+      expect(processableOrders.length).to.be.eq(1);
+    });
+    it("should return list of processable orders", async () => {
+      const orderId1 = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+      const orderId2 = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), optionDecimals),
+          0
+        );
+
+      const orderId3 = await gammaRedeemer.getOrdersLength();
+      const vaultId = await controller.getAccountVaultCounter(sellerAddress);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const processableOrders = await resolver.getProcessableOrders();
+      expect(processableOrders.length).to.be.eq(2);
+      expect(
+        processableOrders.findIndex(
+          (orderId) => orderId.toString() === orderId1.toString()
+        )
+      ).to.be.gte(0);
+      expect(
+        processableOrders.findIndex(
+          (orderId) => orderId.toString() === orderId2.toString()
+        )
+      ).to.be.lt(0);
+      expect(
+        processableOrders.findIndex(
+          (orderId) => orderId.toString() === orderId3.toString()
+        )
+      ).to.be.gte(0);
+    });
   });
 });
