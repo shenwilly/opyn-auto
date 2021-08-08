@@ -78,7 +78,7 @@ describe("Gamma Redeemer Resolver", () => {
   const usdcDecimals = 6;
   const wethDecimals = 18;
 
-  before("setup contracts", async () => {
+  beforeEach("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
     deployerAddress = deployer.address;
     buyerAddress = buyer.address;
@@ -139,7 +139,9 @@ describe("Gamma Redeemer Resolver", () => {
       buyer
     )) as GammaRedeemerResolver__factory;
     resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+  });
 
+  beforeEach(async () => {
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1000);
 
@@ -272,7 +274,6 @@ describe("Gamma Redeemer Resolver", () => {
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return true if buy order could be processed", async () => {
-      console.log("?");
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
@@ -319,6 +320,23 @@ describe("Gamma Redeemer Resolver", () => {
       );
       expect(vault[0][0]).to.be.eq(ethPut.address);
       expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(true);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
       expect(
         await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
       ).to.be.eq(true);
@@ -332,8 +350,51 @@ describe("Gamma Redeemer Resolver", () => {
   });
 
   describe("getOrderHash()", async () => {
-    it("should return buyer hash", async () => {});
-    it("should return seller hash", async () => {});
+    it("should return buyer hash", async () => {
+      const buyerHash = await resolver.getOrderHash({
+        owner: buyerAddress,
+        otoken: ethPut.address,
+        amount: BigNumber.from(1000),
+        vaultId: BigNumber.from(0),
+        isSeller: false,
+        toETH: false,
+        finished: false,
+      });
+      const encoded = ethers.utils.defaultAbiCoder.encode(
+        ["address", "address"],
+        [buyerAddress, ethPut.address]
+      );
+      expect(buyerHash).to.be.eq(ethers.utils.keccak256(encoded));
+
+      const encodedWrong = ethers.utils.defaultAbiCoder.encode(
+        ["address", "uint256"],
+        [buyerAddress, BigNumber.from(1)]
+      );
+      expect(buyerHash).to.be.not.eq(ethers.utils.keccak256(encodedWrong));
+    });
+    it("should return seller hash", async () => {
+      const sellerHash = await resolver.getOrderHash({
+        owner: sellerAddress,
+        otoken: ethPut.address,
+        amount: BigNumber.from(0),
+        vaultId: BigNumber.from(1),
+        isSeller: true,
+        toETH: false,
+        finished: false,
+      });
+
+      const encoded = ethers.utils.defaultAbiCoder.encode(
+        ["address", "uint256"],
+        [sellerAddress, BigNumber.from(1)]
+      );
+      expect(sellerHash).to.be.eq(ethers.utils.keccak256(encoded));
+
+      const encodedWrong = ethers.utils.defaultAbiCoder.encode(
+        ["address", "address"],
+        [buyerAddress, ethPut.address]
+      );
+      expect(sellerHash).to.be.not.eq(ethers.utils.keccak256(encodedWrong));
+    });
   });
 
   describe("getProcessableOrders()", async () => {
