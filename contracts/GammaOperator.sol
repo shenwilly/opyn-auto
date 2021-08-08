@@ -263,6 +263,24 @@ contract GammaOperator is Ownable {
     }
 
     /**
+     * @param _otoken otoken address
+     * @return true if otoken has expired and settlement is allowed
+     */
+    function hasExpiredAndSettlementAllowed(address _otoken)
+        public
+        view
+        returns (bool)
+    {
+        bool hasExpired = block.timestamp >= IOtoken(_otoken).expiryTimestamp();
+        if (!hasExpired) return false;
+
+        bool isAllowed = isSettlementAllowed(_otoken);
+        if (!isAllowed) return false;
+
+        return true;
+    }
+
+    /**
      * @notice return if specific vault exist
      * @param _owner owner address
      * @param _vaultId vaultId to check

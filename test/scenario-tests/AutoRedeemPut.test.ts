@@ -16,6 +16,10 @@ import {
   GammaOperator,
   PokeMe__factory,
   PokeMe,
+  TaskTreasury__factory,
+  TaskTreasury,
+  GammaRedeemerResolver,
+  GammaRedeemerResolver__factory,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -30,6 +34,7 @@ import {
 } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
 import { BigNumber } from "@ethersproject/bignumber";
+import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
 const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -51,7 +56,9 @@ describe("Scenario: Auto Redeem Put", () => {
   let oracle: MockOracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
+  let resolver: GammaRedeemerResolver;
   let automator: PokeMe;
+  let automatorTreasury: TaskTreasury;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -100,12 +107,22 @@ describe("Scenario: Auto Redeem Put", () => {
     whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
     whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
 
+    const TaskTreasuryFactory = (await ethers.getContractFactory(
+      "TaskTreasury",
+      buyer
+    )) as TaskTreasury__factory;
+    automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
+
     // deploy Vault Operator
     const PokeMeFactory = (await ethers.getContractFactory(
       "PokeMe",
       buyer
     )) as PokeMe__factory;
-    automator = await PokeMeFactory.deploy(deployerAddress);
+    automator = await PokeMeFactory.deploy(
+      deployerAddress,
+      automatorTreasury.address
+    );
+    await automatorTreasury.addWhitelistedService(automator.address);
 
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
@@ -114,8 +131,15 @@ describe("Scenario: Auto Redeem Put", () => {
     )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(
       addressBook.address,
-      automator.address
+      automator.address,
+      automatorTreasury.address
     );
+
+    const ResolverFactory = (await ethers.getContractFactory(
+      "GammaRedeemerResolver",
+      buyer
+    )) as GammaRedeemerResolver__factory;
+    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1);
@@ -180,32 +204,14 @@ describe("Scenario: Auto Redeem Put", () => {
         parseUnits(optionAmount.toString(), optionDecimals)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
+
+    await gammaRedeemer.startAutomator(resolver.address);
   });
 
   describe("auto redeem", async () => {
     before(async () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
-    });
-
-    it("should revert if otoken settlement has not been finalised", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(buyer)
-        .createOrder(
-          ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
-          0
-        );
-
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrder",
-        [orderId]
-      );
-      await expect(
-        automator.connect(deployer).exec(0, gammaRedeemer.address, taskData)
-      ).to.be.reverted;
     });
     it("should redeem otoken", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
@@ -233,13 +239,25 @@ describe("Scenario: Auto Redeem Put", () => {
       const balanceBefore = await usdc.balanceOf(buyerAddress);
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+
+      const orderIds = await resolver.getProcessableOrders();
+      expect(orderIds.findIndex((id) => id == orderId) >= 0);
+
       const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrder",
-        [orderId]
+        "processOrders",
+        [[orderId]]
       );
+
       await automator
         .connect(deployer)
-        .exec(0, gammaRedeemer.address, taskData);
+        .exec(
+          0,
+          ETH_TOKEN_ADDRESS,
+          gammaRedeemer.address,
+          gammaRedeemer.address,
+          taskData
+        );
+      // .exec(0, gammaRedeemer.address, taskData);
 
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
@@ -270,13 +288,22 @@ describe("Scenario: Auto Redeem Put", () => {
       const balanceBefore = await usdc.balanceOf(sellerAddress);
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+
+      const orderIds = await resolver.getProcessableOrders();
       const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrder",
-        [orderId]
+        "processOrders",
+        [orderIds]
       );
+
       await automator
         .connect(deployer)
-        .exec(0, gammaRedeemer.address, taskData);
+        .exec(
+          0,
+          ETH_TOKEN_ADDRESS,
+          gammaRedeemer.address,
+          gammaRedeemer.address,
+          taskData
+        );
 
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);

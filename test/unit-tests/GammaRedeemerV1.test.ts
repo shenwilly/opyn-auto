@@ -14,6 +14,9 @@ import {
   GammaRedeemerV1__factory,
   GammaRedeemerV1,
   PokeMe__factory,
+  GammaRedeemerResolver__factory,
+  GammaRedeemerResolver,
+  TaskTreasury__factory,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -26,6 +29,7 @@ import {
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
+import { constants } from "ethers";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -46,6 +50,7 @@ describe("GammaRedeemer", () => {
   let oracle: MockOracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
+  let resolver: GammaRedeemerResolver;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -79,7 +84,7 @@ describe("GammaRedeemer", () => {
       marginPool,
       calculator,
       controller,
-    ] = await setupGammaContracts();
+    ] = await setupGammaContracts(deployer);
 
     // setup usdc and weth
     const mockERC20Factory = (await ethers.getContractFactory(
@@ -97,19 +102,35 @@ describe("GammaRedeemer", () => {
     // deploy Vault Operator
     const PokeMeFactory = (await ethers.getContractFactory(
       "PokeMe",
-      buyer
+      deployer
     )) as PokeMe__factory;
-    const automator = await PokeMeFactory.deploy(deployerAddress);
+    const automator = await PokeMeFactory.deploy(
+      deployerAddress,
+      deployerAddress
+    );
+
+    const TaskTreasuryFactory = (await ethers.getContractFactory(
+      "TaskTreasury",
+      buyer
+    )) as TaskTreasury__factory;
+    const automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
 
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
       "GammaRedeemerV1",
-      buyer
+      deployer
     )) as GammaRedeemerV1__factory;
     gammaRedeemer = await GammaRedeemerFactory.deploy(
       addressBook.address,
-      automator.address
+      automator.address,
+      automatorTreasury.address
     );
+
+    const ResolverFactory = (await ethers.getContractFactory(
+      "GammaRedeemerResolver",
+      buyer
+    )) as GammaRedeemerResolver__factory;
+    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 7);
@@ -174,6 +195,8 @@ describe("GammaRedeemer", () => {
         parseUnits(optionAmount.toString(), optionDecimals)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
+
+    await gammaRedeemer.connect(deployer).startAutomator(resolver.address);
   });
 
   describe("createOrder()", async () => {
@@ -255,9 +278,11 @@ describe("GammaRedeemer", () => {
 
   describe("cancelOrder()", async () => {
     let orderId: BigNumber;
-    beforeEach(async () => {
+    before(async () => {
       orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(constants.AddressZero, 0, 10);
     });
     it("should revert if sender is not owner", async () => {
       await expectRevert(
@@ -274,12 +299,17 @@ describe("GammaRedeemer", () => {
       );
     });
     it("should cancel order", async () => {
-      const tx = await gammaRedeemer.connect(seller).cancelOrder(orderId);
+      const newOrderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(constants.AddressZero, 0, 10);
+
+      const tx = await gammaRedeemer.connect(seller).cancelOrder(newOrderId);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderFinished"
       )[0];
-      expect(event.args![0]).to.be.eq(orderId);
+      expect(event.args![0]).to.be.eq(newOrderId);
       expect(event.args![1]).to.be.eq(true);
     });
   });

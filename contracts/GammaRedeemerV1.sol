@@ -4,6 +4,8 @@ pragma solidity 0.8.0;
 import {GammaOperator} from "./GammaOperator.sol";
 import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
+import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
+import {IResolver} from "./interfaces/IResolver.sol";
 
 /// @author Willy Shen
 /// @title Gamma Automatic Redeemer
@@ -12,19 +14,51 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
     IPokeMe public automator;
+    ITaskTreasury public automatorTreasury;
+    bool public isAutomatorEnabled;
 
     /**
      * @notice only automator
      */
     modifier onlyAuthorized() {
-        // msg.sender == executor
+        require(
+            msg.sender == address(automator) || msg.sender == owner(),
+            "GammaRedeemer::onlyAuthorized: Only automator or owner"
+        );
         _;
     }
 
-    constructor(address _gammaAddressBook, address _automator)
-        GammaOperator(_gammaAddressBook)
-    {
+    constructor(
+        address _gammaAddressBook,
+        address _automator,
+        address _automatorTreasury
+    ) GammaOperator(_gammaAddressBook) {
         automator = IPokeMe(_automator);
+        automatorTreasury = ITaskTreasury(_automatorTreasury);
+        isAutomatorEnabled = false;
+    }
+
+    function startAutomator(address _resolver) public onlyOwner {
+        require(!isAutomatorEnabled);
+        isAutomatorEnabled = true;
+        automator.createTask(
+            address(this),
+            bytes4(keccak256("processOrders(uint256[])")),
+            _resolver,
+            abi.encodeWithSelector(IResolver.getProcessableOrders.selector)
+        );
+    }
+
+    function stopAutomator() public onlyOwner {
+        require(isAutomatorEnabled);
+        isAutomatorEnabled = false;
+        automator.cancelTask(
+            automator.getTaskId(
+                address(this),
+                address(this),
+                bytes4(keccak256("processOrders(uint256[])"))
+            )
+        );
     }
 
     /**
@@ -38,10 +72,17 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         uint256 _amount,
         uint256 _vaultId
     ) public override {
-        require(
-            isWhitelistedOtoken(_otoken),
-            "GammaRedeemer::createOrder: Otoken not whitelisted"
-        );
+        if (_otoken == address(0)) {
+            require(
+                _amount == 0,
+                "GammaRedeemer::createOrder: Amount must be 0 when creating settle order"
+            );
+        } else {
+            require(
+                isWhitelistedOtoken(_otoken),
+                "GammaRedeemer::createOrder: Otoken not whitelisted"
+            );
+        }
 
         uint256 orderId = orders.length;
 
@@ -53,14 +94,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.isSeller = _amount == 0;
         orders.push(order);
 
-        automator.createTask(
-            address(this),
-            abi.encodeWithSelector(
-                bytes4(keccak256("processOrder(uint256)")),
-                orderId
-            )
-        );
-
         emit OrderCreated(orderId, msg.sender, _otoken);
     }
 
@@ -69,25 +102,17 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @param _orderId the order Id to be cancelled
      */
     function cancelOrder(uint256 _orderId) public override {
+        Order storage order = orders[_orderId];
         require(
-            orders[_orderId].owner == msg.sender,
+            order.owner == msg.sender,
             "GammaRedeemer::cancelOrder: Sender is not order owner"
         );
         require(
-            !orders[_orderId].finished,
+            !order.finished,
             "GammaRedeemer::cancelOrder: Order is already finished"
         );
 
-        orders[_orderId].finished = true;
-
-        automator.cancelTask(
-            address(this),
-            abi.encodeWithSelector(
-                bytes4(keccak256("processOrder(uint256)")),
-                _orderId
-            )
-        );
-
+        order.finished = true;
         emit OrderFinished(_orderId, true);
     }
 
@@ -104,6 +129,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         returns (bool)
     {
         Order memory order = orders[_orderId];
+        if (order.finished) return false;
 
         if (order.isSeller) {
             bool shouldSettle = shouldSettleVault(order.owner, order.vaultId);
@@ -148,14 +174,39 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderFinished(_orderId, false);
     }
 
-    function withdrawFund(uint256 _amount) public {
-        automator.withdrawFunds(_amount);
-        (bool success, ) = owner().call{value: _amount}("");
-        require(success, "GammaRedeemer::withdrawFunds: Withdraw funds failed");
+    function processOrders(uint256[] calldata _orderIds) public onlyAuthorized {
+        for (uint256 i = 0; i < _orderIds.length; i++) {
+            processOrder(_orderIds[i]);
+        }
     }
 
-    function getOrdersLength() public view returns (uint256) {
+    function withdrawFund(address _token, uint256 _amount) public {
+        automatorTreasury.withdrawFunds(payable(this), _token, _amount);
+    }
+
+    function setAutomator(address _automator) public onlyOwner {
+        automator = IPokeMe(_automator);
+    }
+
+    function setAutomatorTreasury(address _automatorTreasury) public onlyOwner {
+        automatorTreasury = ITaskTreasury(_automatorTreasury);
+    }
+
+    function getOrdersLength() public view override returns (uint256) {
         return orders.length;
+    }
+
+    function getOrders() public view override returns (Order[] memory) {
+        return orders;
+    }
+
+    function getOrder(uint256 _orderId)
+        public
+        view
+        override
+        returns (Order memory)
+    {
+        return orders[_orderId];
     }
 
     receive() external payable {}
