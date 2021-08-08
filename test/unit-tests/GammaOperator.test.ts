@@ -178,8 +178,86 @@ describe("GammaOperator", () => {
 
       expect(optionBalanceBefore).to.be.gt(0);
       expect(optionBalanceAfter).to.be.eq(0);
+    });
+    it("should redeem otoken with fee correctly", async () => {
+      let fee = 50;
+      let strikePrice = 200;
+      let collateralAmount = parseUnits("1000", usdcDecimals);
+      let shortOptionAmount = parseUnits("1", optionDecimals);
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 19);
 
-      // TODO: with Fee
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          shortOptionAmount
+        ),
+      ];
+      await controller.connect(seller).operate(actionArgs);
+      await ethPut.connect(seller).transfer(buyerAddress, shortOptionAmount);
+      await ethPut
+        .connect(buyer)
+        .approve(gammaOperator.address, shortOptionAmount);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const usdcBalanceBefore = await usdc.balanceOf(buyerAddress);
+      const optionBalanceBefore = await ethPut.balanceOf(buyerAddress);
+      const payout = await controller.getPayout(
+        ethPut.address,
+        shortOptionAmount
+      );
+      const payoutMinusFee = payout.sub(payout.mul(fee).div(10000));
+
+      await gammaOperator
+        .connect(buyer)
+        .redeem(buyerAddress, ethPut.address, shortOptionAmount, fee);
+
+      const usdcBalanceAfter = await usdc.balanceOf(buyerAddress);
+      const optionBalanceAfter = await ethPut.balanceOf(buyerAddress);
+
+      expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
+      const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
+      expect(difference).to.be.eq(payoutMinusFee);
+
+      expect(optionBalanceBefore).to.be.gt(0);
+      expect(optionBalanceAfter).to.be.eq(0);
     });
   });
 
@@ -248,8 +326,73 @@ describe("GammaOperator", () => {
       expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
       const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
       expect(difference).to.be.eq(proceed);
+    });
+    it("should settle vault with fee correctly", async () => {
+      let fee = 10;
+      let strikePrice = 200;
+      let collateralAmount = parseUnits("1000", usdcDecimals);
+      let shortOptionAmount = parseUnits("1", optionDecimals);
+      const now = (await time.latest()).toNumber();
+      const expiry = createValidExpiry(now, 21);
 
-      // TODO: with Fee
+      const ethPut = await createOtoken(
+        otokenFactory,
+        weth.address,
+        usdc.address,
+        usdc.address,
+        parseUnits(strikePrice.toString(), strikePriceDecimals),
+        expiry,
+        true
+      );
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        getActionOpenVault(sellerAddress, vaultId.toString()),
+        getActionDepositCollateral(
+          sellerAddress,
+          vaultId.toString(),
+          usdc.address,
+          collateralAmount
+        ),
+        getActionMintShort(
+          sellerAddress,
+          vaultId.toString(),
+          ethPut.address,
+          shortOptionAmount
+        ),
+      ];
+      await controller.connect(seller).operate(actionArgs);
+      await setOperator(seller, controller, gammaOperator.address, true);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        weth.address,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
+        true
+      );
+      await oracle.setExpiryPriceFinalizedAllPeiodOver(
+        usdc.address,
+        expiry,
+        parseUnits("1", strikePriceDecimals),
+        true
+      );
+
+      const usdcBalanceBefore = await usdc.balanceOf(sellerAddress);
+      const proceed = await controller.getProceed(sellerAddress, vaultId);
+      const proceedMinusFee = proceed.sub(proceed.mul(fee).div(10000));
+
+      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId, fee);
+
+      const usdcBalanceAfter = await usdc.balanceOf(sellerAddress);
+
+      expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
+      const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
+      expect(difference).to.be.eq(proceedMinusFee);
     });
   });
 
