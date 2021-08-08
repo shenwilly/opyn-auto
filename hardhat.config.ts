@@ -10,6 +10,7 @@ import "@nomiclabs/hardhat-web3";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
 
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || "";
 const INFURA_API_KEY = process.env.INFURA_API_KEY || "";
 const ROPSTEN_PRIVATE_KEY =
   process.env.ROPSTEN_PRIVATE_KEY! ||
@@ -31,11 +32,11 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      allowUnlimitedContractSize: true
-      // forking: {
-      //   url: "https://eth-mainnet.alchemyapi.io/v2/[API_KEY]",
-      //   blockNumber: 12627210,
-      // },
+      allowUnlimitedContractSize: true,
+      forking: {
+        url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
+        blockNumber: 12984971,
+      },
     },
     localhost: {
       allowUnlimitedContractSize: true
@@ -61,6 +62,9 @@ const config: HardhatUserConfig = {
     enabled: false,
     currency: 'eth',
     coinmarketcap: CMC_API_KEY
+  },
+  mocha: {
+    timeout: 2000000
   }
 };
 
