@@ -17,10 +17,11 @@ import {
   GammaRedeemerResolver__factory,
   GammaRedeemerResolver,
   TaskTreasury__factory,
+  TaskTreasury,
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { parseUnits } from "ethers/lib/utils";
+import { parseEther, parseUnits } from "ethers/lib/utils";
 import {
   getActionDepositCollateral,
   getActionMintShort,
@@ -30,9 +31,11 @@ import {
 } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
 import { constants } from "ethers";
+import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
+const ZERO_ADDR = constants.AddressZero;
 
 describe("GammaRedeemer", () => {
   let deployer: SignerWithAddress;
@@ -51,6 +54,7 @@ describe("GammaRedeemer", () => {
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
   let resolver: GammaRedeemerResolver;
+  let automatorTreasury: TaskTreasury;
 
   let expiry: number;
   let usdc: MockERC20;
@@ -113,7 +117,7 @@ describe("GammaRedeemer", () => {
       "TaskTreasury",
       buyer
     )) as TaskTreasury__factory;
-    const automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
+    automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
 
     // deploy Vault Operator
     const GammaRedeemerFactory = (await ethers.getContractFactory(
@@ -234,6 +238,7 @@ describe("GammaRedeemer", () => {
         orderVaultId,
         orderIsSeller,
         orderToEth,
+        orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
       expect(orderOwner).to.be.eq(buyerAddress);
@@ -244,13 +249,14 @@ describe("GammaRedeemer", () => {
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
       expect(orderToEth).to.be.eq(false);
+      expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
     it("should create seller order", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
         .connect(seller)
-        .createOrder(ethPut.address, 0, 1);
+        .createOrder(ZERO_ADDR, 0, 1);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderCreated"
@@ -264,14 +270,16 @@ describe("GammaRedeemer", () => {
         orderVaultId,
         orderIsSeller,
         orderToEth,
+        orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
       expect(orderOwner).to.be.eq(sellerAddress);
-      // expect(orderOtoken).to.be.eq(ethPut.address);
+      expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
       expect(orderVaultId).to.be.eq(1);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToEth).to.be.eq(false);
+      expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
   });
@@ -280,9 +288,7 @@ describe("GammaRedeemer", () => {
     let orderId: BigNumber;
     before(async () => {
       orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(constants.AddressZero, 0, 10);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
     });
     it("should revert if sender is not owner", async () => {
       await expectRevert(
@@ -300,9 +306,7 @@ describe("GammaRedeemer", () => {
     });
     it("should cancel order", async () => {
       const newOrderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(constants.AddressZero, 0, 10);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
 
       const tx = await gammaRedeemer.connect(seller).cancelOrder(newOrderId);
       const receipt = await tx.wait();
@@ -374,9 +378,7 @@ describe("GammaRedeemer", () => {
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
 
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ethPut.address, 0, vaultId);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
     });
@@ -491,7 +493,7 @@ describe("GammaRedeemer", () => {
     });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 1);
 
       await setOperator(seller, controller, gammaRedeemer.address, true);
       await oracle.setExpiryPriceFinalizedAllPeiodOver(
@@ -510,6 +512,101 @@ describe("GammaRedeemer", () => {
       await gammaRedeemer.connect(deployer).processOrder(orderId);
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
+    });
+  });
+
+  describe("withdrawFunds()", async () => {
+    const amount = parseEther("1");
+    before(async () => {
+      await automatorTreasury.depositFunds(
+        gammaRedeemer.address,
+        ETH_TOKEN_ADDRESS,
+        0,
+        {
+          value: amount,
+        }
+      );
+    });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).withdrawFund(ETH_TOKEN_ADDRESS, amount),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should withdraw funds from treasury", async () => {
+      const ethBalanceBefore = await ethers.provider.getBalance(
+        gammaRedeemer.address
+      );
+      await gammaRedeemer
+        .connect(deployer)
+        .withdrawFund(ETH_TOKEN_ADDRESS, amount);
+      const ethBalanceAfter = await ethers.provider.getBalance(
+        gammaRedeemer.address
+      );
+
+      expect(ethBalanceAfter.sub(ethBalanceBefore)).to.be.eq(amount);
+    });
+  });
+
+  describe("setAutomator()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setAutomator(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator", async () => {
+      const oldAddress = await gammaRedeemer.automator();
+      const newAddress = buyerAddress;
+      expect(oldAddress).to.not.be.eq(newAddress);
+      await gammaRedeemer.connect(deployer).setAutomator(newAddress);
+      expect(await gammaRedeemer.automator()).to.be.eq(newAddress);
+    });
+  });
+
+  describe("setAutomatorTreasury()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setAutomatorTreasury(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldAddress = await gammaRedeemer.automatorTreasury();
+      const newAddress = buyerAddress;
+      expect(oldAddress).to.not.be.eq(newAddress);
+      await gammaRedeemer.connect(deployer).setAutomatorTreasury(newAddress);
+      expect(await gammaRedeemer.automatorTreasury()).to.be.eq(newAddress);
+    });
+  });
+
+  describe("setRedeemFee()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setRedeemFee(1),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldFee = await gammaRedeemer.redeemFee();
+      const newFee = oldFee.add(1);
+      await gammaRedeemer.connect(deployer).setRedeemFee(newFee);
+      expect(await gammaRedeemer.redeemFee()).to.be.eq(newFee);
+    });
+  });
+
+  describe("setSettleFee()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setSettleFee(1),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldFee = await gammaRedeemer.settleFee();
+      const newFee = oldFee.add(1);
+      await gammaRedeemer.connect(deployer).setSettleFee(newFee);
+      expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
     });
   });
 });

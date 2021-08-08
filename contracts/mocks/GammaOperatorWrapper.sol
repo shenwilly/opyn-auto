@@ -9,12 +9,17 @@ contract GammaOperatorWrapper is GammaOperator {
     function redeem(
         address _owner,
         address _otoken,
-        uint256 _amount
+        uint256 _amount,
+        uint256 _fee
     ) public {
-        redeemOtoken(_owner, _otoken, _amount);
+        redeemOtoken(_owner, _otoken, _amount, _fee);
     }
 
-    function settle(address _owner, uint256 _vaultId) public {
-        settleVault(_owner, _vaultId);
+    function settle(
+        address _owner,
+        uint256 _vaultId,
+        uint256 _fee
+    ) public {
+        settleVault(_owner, _vaultId, _fee);
     }
 }

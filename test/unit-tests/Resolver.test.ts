@@ -35,10 +35,11 @@ import {
 import { ActionType } from "../helpers/types/GammaTypes";
 import { BigNumber } from "@ethersproject/bignumber";
 import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
-const { time, constants, expectRevert } = require("@openzeppelin/test-helpers");
+import { constants } from "ethers/lib/ethers";
+const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
-const ZERO_ADDR = constants.ZERO_ADDRESS;
+const ZERO_ADDR = constants.AddressZero;
 
 describe("Gamma Redeemer Resolver", () => {
   let deployer: SignerWithAddress;
@@ -357,6 +358,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(0),
         isSeller: false,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       });
       const hash2 = await resolver.getOrderHash({
@@ -366,6 +368,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(1),
         isSeller: true,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       });
 
@@ -379,6 +382,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(0),
         isSeller: false,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       };
       const hash = await resolver.getOrderHash(buyOrder);
@@ -393,6 +397,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(1),
         isSeller: true,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       };
       expect(
@@ -407,6 +412,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(0),
         isSeller: false,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       };
       expect(
@@ -420,6 +426,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(3),
         isSeller: true,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       };
       expect(
@@ -437,6 +444,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(0),
         isSeller: false,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       });
       const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -459,6 +467,7 @@ describe("Gamma Redeemer Resolver", () => {
         vaultId: BigNumber.from(1),
         isSeller: true,
         toETH: false,
+        fee: BigNumber.from(0),
         finished: false,
       });
 

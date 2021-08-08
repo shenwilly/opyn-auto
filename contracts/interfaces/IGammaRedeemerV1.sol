@@ -15,6 +15,8 @@ interface IGammaRedeemerV1 {
         bool isSeller;
         // convert proceed to ETH, currently disabled
         bool toETH;
+        // fee in 1/10.000
+        uint256 fee;
         // true if order is already processed
         bool finished;
     }
