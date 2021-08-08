@@ -549,90 +549,64 @@ describe("GammaRedeemer", () => {
   });
 
   describe("setAutomator()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setAutomator(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator", async () => {
+      const oldAddress = await gammaRedeemer.automator();
+      const newAddress = buyerAddress;
+      expect(oldAddress).to.not.be.eq(newAddress);
+      await gammaRedeemer.connect(deployer).setAutomator(newAddress);
+      expect(await gammaRedeemer.automator()).to.be.eq(newAddress);
+    });
   });
 
   describe("setAutomatorTreasury()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setAutomatorTreasury(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldAddress = await gammaRedeemer.automatorTreasury();
+      const newAddress = buyerAddress;
+      expect(oldAddress).to.not.be.eq(newAddress);
+      await gammaRedeemer.connect(deployer).setAutomatorTreasury(newAddress);
+      expect(await gammaRedeemer.automatorTreasury()).to.be.eq(newAddress);
+    });
   });
 
   describe("setRedeemFee()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setRedeemFee(1),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldFee = await gammaRedeemer.redeemFee();
+      const newFee = oldFee.add(1);
+      await gammaRedeemer.connect(deployer).setRedeemFee(newFee);
+      expect(await gammaRedeemer.redeemFee()).to.be.eq(newFee);
+    });
   });
 
   describe("setSettleFee()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setSettleFee(1),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldFee = await gammaRedeemer.settleFee();
+      const newFee = oldFee.add(1);
+      await gammaRedeemer.connect(deployer).setSettleFee(newFee);
+      expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
+    });
   });
 });

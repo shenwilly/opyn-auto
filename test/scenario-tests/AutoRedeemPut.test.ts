@@ -258,7 +258,6 @@ describe("Scenario: Auto Redeem Put", () => {
           gammaRedeemer.address,
           taskData
         );
-      // .exec(0, gammaRedeemer.address, taskData);
 
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
