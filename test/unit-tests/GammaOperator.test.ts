@@ -1171,24 +1171,38 @@ describe("GammaOperator", () => {
   });
 
   describe("harvest()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(buyer).setAddressBook(deployerAddress),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should revert if new address is zero", async () => {
-    //   await expectRevert(
-    //     gammaOperator.connect(deployer).setAddressBook(ZERO_ADDR),
-    //     "GammaOperator::setAddressBook: Address must not be zero"
-    //   );
-    // });
-    // it("should set new addressBook", async () => {
-    //   const oldAddressBook = await gammaOperator.addressBook();
-    //   const newAddressBook = buyerAddress;
-    //   expect(oldAddressBook).to.not.be.eq(newAddressBook);
-    //   await gammaOperator.connect(deployer).setAddressBook(newAddressBook);
-    //   expect(await gammaOperator.addressBook()).to.be.eq(newAddressBook);
-    // });
+    const amount = parseUnits("1000", usdcDecimals);
+    before(async () => {
+      await usdc.mint(gammaOperator.address, amount);
+    });
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaOperator
+          .connect(buyer)
+          .harvest(usdc.address, amount, buyerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if amount is wrong", async () => {
+      await expectRevert(
+        gammaOperator
+          .connect(deployer)
+          .harvest(usdc.address, amount.mul(2), buyerAddress),
+        "ERC20: transfer amount exceeds balance"
+      );
+    });
+    it("should revert if token is wrong", async () => {
+      await expectRevert.unspecified(
+        gammaOperator.connect(deployer).harvest(ZERO_ADDR, amount, buyerAddress)
+      );
+    });
+    it("should harvest token", async () => {
+      const balanceBefore = await usdc.balanceOf(buyerAddress);
+      await gammaOperator
+        .connect(deployer)
+        .harvest(usdc.address, amount, buyerAddress);
+      const balanceAfter = await usdc.balanceOf(buyerAddress);
+      expect(balanceAfter.sub(balanceBefore)).to.be.eq(amount);
+    });
   });
 });
