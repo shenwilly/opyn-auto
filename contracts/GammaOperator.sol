@@ -84,7 +84,7 @@ contract GammaOperator is Ownable {
         action.actionType = Actions.ActionType.SettleVault;
         action.owner = _owner;
         action.vaultId = _vaultId;
-        action.secondAddress = _owner;
+        action.secondAddress = address(this);
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
         actions[0] = action;
