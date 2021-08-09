@@ -1205,7 +1205,7 @@ describe("GammaOperator", () => {
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter.sub(balanceBefore)).to.be.eq(amount);
     });
-    it("should harvest token", async () => {
+    it("should harvest ETH", async () => {
       await deployer.sendTransaction({
         to: gammaOperator.address,
         value: parseEther("1"),
