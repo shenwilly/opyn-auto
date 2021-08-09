@@ -58,7 +58,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
   let ethPut: Otoken;
 
   const strikePrice = 2300;
-  const optionAmount = 1;
+  const optionAmount = 2;
   const collateralAmount = optionAmount * strikePrice;
 
   const strikePriceDecimals = 8;
@@ -93,15 +93,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
       method: "hardhat_impersonateAccount",
       params: [USDC_WALLET],
     });
-    // await hre.network.provider.request({
-    //   method: "hardhat_impersonateAccount",
-    //   params: [WETH_PRICER],
-    // });
 
-    // await deployer.sendTransaction({
-    //   to: WETH_PRICER,
-    //   value: parseEther("1")
-    // });
     const usdcWalletSigner = await ethers.getSigner(USDC_WALLET);
     await usdc
       .connect(usdcWalletSigner)
@@ -217,7 +209,14 @@ describe("Mainnet Fork: Auto Redeem", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits((optionAmount / 2).toString(), optionDecimals),
+          0
+        );
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits((optionAmount / 2).toString(), optionDecimals),
           0
         );
 
@@ -267,6 +266,22 @@ describe("Mainnet Fork: Auto Redeem", () => {
           gammaRedeemer.address,
           gammaRedeemer.address,
           taskData
+        );
+
+      const secondOrderIds = await resolver.getProcessableOrders();
+      expect(secondOrderIds.length).to.be.eq(1);
+      const secondTaskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [secondOrderIds]
+      );
+      await automator
+        .connect(gelatoSigner)
+        .exec(
+          parseEther("0.01"),
+          ETH_TOKEN_ADDRESS,
+          gammaRedeemer.address,
+          gammaRedeemer.address,
+          secondTaskData
         );
 
       const contractBalanceAfter = await usdc.balanceOf(gammaRedeemer.address);
