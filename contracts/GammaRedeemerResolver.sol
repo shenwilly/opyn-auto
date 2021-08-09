@@ -10,7 +10,7 @@ import {MarginVault} from "./external/OpynVault.sol";
 /// @title GammaRedeemer Resolver
 /// @notice A GammaRedeemer resolver for Gelato PokeMe checks
 contract GammaRedeemerResolver is IResolver {
-    address redeemer;
+    address public redeemer;
 
     constructor(address _redeemer) {
         redeemer = _redeemer;
