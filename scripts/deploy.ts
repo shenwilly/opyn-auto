@@ -7,9 +7,9 @@ import {
 } from "../typechain";
 
 async function main() {
-  const PokeMeAddress = "0x53638DFef84aAA6AAbA70F948d39d00001771d99";
-  const TreasuryAddress = "0x2705aCca70CdB3E326C1013eEA2c03A4f2935b66";
-  const GammaAddressBookAddress = "0xE71417EEfC794C9B83Fc494861981721e26db0E9";
+  const PokeMeAddress = "0x89a26d08c26E00cE935a775Ba74A984Ad346679b";
+  const TreasuryAddress = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
+  const GammaAddressBookAddress = "0x1E31F2DCBad4dc572004Eae6355fB18F9615cBe4";
 
   const GammaRedeemerFactory = (
     await ethers.getContractFactory("GammaRedeemerV1")

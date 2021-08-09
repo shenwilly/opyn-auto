@@ -1,4 +1,3 @@
-import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   Controller,
@@ -7,7 +6,7 @@ import {
 
 async function main() {
   const GammaRedeemerAddress = "0xa0EC392636bAD6f8ef163D916c85F9db8d8978A5"
-  const otokenAddress = ""
+  const otokenAddress = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 
   const gammaRedeemer = (await ethers.getContractAt("GammaRedeemerV1", GammaRedeemerAddress)) as GammaRedeemerV1;
   const controllerAddress = await gammaRedeemer.controller();

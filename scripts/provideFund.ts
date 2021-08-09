@@ -6,8 +6,8 @@ import {
 } from "../typechain";
 
 async function main() {
-  const TreasuryAddress = "0x2705aCca70CdB3E326C1013eEA2c03A4f2935b66";
-  const GammaRedeemerAddress = "0xD124F6De09EC929EeCFffbcee4f38D226592Acdb"
+  const TreasuryAddress = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
+  const GammaRedeemerAddress = "0xa9bC42ac855BE4026cE3Ce031f91C8f796122282"
 
   const treasury = (await ethers.getContractAt("TaskTreasury", TreasuryAddress)) as TaskTreasury;
   const tx = await treasury.depositFunds(
