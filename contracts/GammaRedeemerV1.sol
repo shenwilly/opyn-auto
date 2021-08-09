@@ -22,7 +22,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     uint256 public settleFee = 10;
 
     /**
-     * @notice only automator
+     * @notice only automator or owner
      */
     modifier onlyAuthorized() {
         require(
@@ -67,9 +67,9 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     /**
      * @notice create automation order
-     * @param _otoken the address of otoken
-     * @param _amount amount of otoken
-     * @param _vaultId only for writers, the vaultId to settle
+     * @param _otoken the address of otoken (only holders)
+     * @param _amount amount of otoken (only holders)
+     * @param _vaultId the id of specific vault to settle (only writers)
      */
     function createOrder(
         address _otoken,
@@ -109,7 +109,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     /**
      * @notice cancel automation order
-     * @param _orderId the order Id to be cancelled
+     * @param _orderId the id of specific order to be cancelled
      */
     function cancelOrder(uint256 _orderId) public override {
         Order storage order = orders[_orderId];
@@ -128,8 +128,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     /**
      * @notice check if processing order is profitable
-     * @dev automator should call this first before calling processOrder
-     * @param _orderId the id of the order to be processed
+     * @param _orderId the id of specific order to be processed
      * @return true if settling vault / redeeming returns more than 0 amount
      */
     function shouldProcessOrder(uint256 _orderId)
@@ -159,7 +158,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     /**
      * @notice process an order
      * @dev only automator allowed
-     * @param _orderId the order Id to be processed
+     * @param _orderId the id of specific order to process
      */
     function processOrder(uint256 _orderId) public override onlyAuthorized {
         Order storage order = orders[_orderId];
@@ -174,7 +173,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         );
         order.finished = true;
 
-        // process
         if (order.isSeller) {
             settleVault(order.owner, order.vaultId, order.fee);
         } else {
@@ -184,12 +182,21 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         emit OrderFinished(_orderId, false);
     }
 
-    function processOrders(uint256[] calldata _orderIds) public onlyAuthorized {
+    /**
+     * @notice process multiple orders
+     * @param _orderIds array of order ids to process
+     */
+    function processOrders(uint256[] calldata _orderIds) public {
         for (uint256 i = 0; i < _orderIds.length; i++) {
             processOrder(_orderIds[i]);
         }
     }
 
+    /**
+     * @notice withdraw funds from automator
+     * @param _token address of token to withdraw
+     * @param _amount amount of token to withdraw
+     */
     function withdrawFund(address _token, uint256 _amount) public onlyOwner {
         automatorTreasury.withdrawFunds(payable(this), _token, _amount);
     }

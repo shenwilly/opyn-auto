@@ -74,6 +74,7 @@ contract GammaOperator is Ownable {
      * @notice settle vault on behalf of user
      * @param _owner owner address
      * @param _vaultId vaultId to settle
+     * @param _fee fee in 1/10.000
      */
     function settleVault(
         address _owner,
@@ -168,6 +169,12 @@ contract GammaOperator is Ownable {
         addressBook = IAddressBook(_address);
     }
 
+    /**
+     * @notice transfer operator profit
+     * @param _token address token to transfer
+     * @param _amount amount of token to transfer
+     * @param _to transfer destination
+     */
     function harvest(
         address _token,
         uint256 _amount,

@@ -13,7 +13,7 @@ interface IGammaRedeemerV1 {
         uint256 vaultId;
         // true if settle vault order, else redeem otoken
         bool isSeller;
-        // convert proceed to ETH, currently disabled
+        // convert proceed to ETH, currently unused
         bool toETH;
         // fee in 1/10.000
         uint256 fee;
