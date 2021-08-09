@@ -233,6 +233,4 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     {
         return orders[_orderId];
     }
-
-    receive() external payable {}
 }

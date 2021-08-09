@@ -180,7 +180,12 @@ contract GammaOperator is Ownable {
         uint256 _amount,
         address _to
     ) public onlyOwner {
-        IERC20(_token).safeTransfer(_to, _amount);
+        if (_token == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+            (bool success, ) = _to.call{value: _amount}("");
+            require(success, "GammaOperator::harvest: ETH transfer failed");
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
 
     /**
@@ -355,4 +360,6 @@ contract GammaOperator is Ownable {
     function min(uint256 a, uint256 b) private pure returns (uint256) {
         return a > b ? b : a;
     }
+
+    receive() external payable {}
 }

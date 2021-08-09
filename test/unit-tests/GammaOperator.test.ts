@@ -16,7 +16,7 @@ import {
 } from "../../typechain";
 import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { parseUnits } from "ethers/lib/utils";
+import { parseEther, parseUnits } from "ethers/lib/utils";
 import {
   createOtoken,
   getActionDepositCollateral,
@@ -27,6 +27,7 @@ import {
 } from "../helpers/setup/GammaSetup";
 import { ActionType } from "../helpers/types/GammaTypes";
 import { constants } from "ethers/lib/ethers";
+import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
 
 const { expect } = chai;
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
@@ -1203,6 +1204,22 @@ describe("GammaOperator", () => {
         .harvest(usdc.address, amount, buyerAddress);
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter.sub(balanceBefore)).to.be.eq(amount);
+    });
+    it("should harvest token", async () => {
+      await deployer.sendTransaction({
+        to: gammaOperator.address,
+        value: parseEther("1"),
+      });
+      const balanceBefore = await ethers.provider.getBalance(
+        gammaOperator.address
+      );
+      await gammaOperator
+        .connect(deployer)
+        .harvest(ETH_TOKEN_ADDRESS, parseEther("1"), buyerAddress);
+      const balanceAfter = await ethers.provider.getBalance(
+        gammaOperator.address
+      );
+      expect(balanceBefore.sub(balanceAfter)).to.be.eq(parseEther("1"));
     });
   });
 });
