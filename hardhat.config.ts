@@ -25,18 +25,33 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   solidity: {
     compilers: [
-      { version: "0.8.0", settings: {} },
-      { version: "0.7.6", settings: {} },
-      { version: "0.6.10", settings: {} }
+      { version: "0.8.0", settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200
+        },
+      } },
+      { version: "0.7.6", settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200
+        },
+      } },
+      { version: "0.6.10", settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200
+        },
+      } }
     ],
   },
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
-      forking: {
-        url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
-        blockNumber: 12984971,
-      },
+      // forking: {
+      //   url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
+      //   blockNumber: 12984971,
+      // },
     },
     localhost: {
       allowUnlimitedContractSize: true
