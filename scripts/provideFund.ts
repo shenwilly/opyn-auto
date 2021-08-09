@@ -1,17 +1,23 @@
 import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import { ETH_TOKEN_ADDRESS } from "../test/helpers/constants";
 import {
-  PokeMe
+  TaskTreasury
 } from "../typechain";
 
 async function main() {
-  const PokeMeAddress = "0xeC8700A092789F58608212E314e3576bF2E98556";
-  const GammaRedeemerAddress = "0xa0EC392636bAD6f8ef163D916c85F9db8d8978A5"
+  const TreasuryAddress = "0x2705aCca70CdB3E326C1013eEA2c03A4f2935b66";
+  const GammaRedeemerAddress = "0xD124F6De09EC929EeCFffbcee4f38D226592Acdb"
 
-  const automator = (await ethers.getContractAt("PokeMe", PokeMeAddress)) as PokeMe;
-  const tx = await automator.depositFunds(GammaRedeemerAddress, {
-    value: parseUnits("0.1", "ether")
-  })
+  const treasury = (await ethers.getContractAt("TaskTreasury", TreasuryAddress)) as TaskTreasury;
+  const tx = await treasury.depositFunds(
+    GammaRedeemerAddress, 
+    ETH_TOKEN_ADDRESS,
+    0,
+    {
+      value: parseUnits("0.1", "ether"),
+    }
+  );
   console.log(tx.hash);
 }
 
