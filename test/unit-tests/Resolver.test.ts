@@ -529,7 +529,8 @@ describe("Gamma Redeemer Resolver", () => {
         true
       );
 
-      const [canExecBefore, execPayloadBefore] = await resolver.getProcessableOrders();
+      const [canExecBefore, execPayloadBefore] =
+        await resolver.getProcessableOrders();
       expect(canExecBefore).to.be.eq(true);
       const taskDataBefore = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
@@ -539,7 +540,8 @@ describe("Gamma Redeemer Resolver", () => {
 
       await gammaRedeemer.connect(deployer).processOrder(orderId);
 
-      const [canExecAfter, execPayloadAfter] = await resolver.getProcessableOrders();
+      const [canExecAfter, execPayloadAfter] =
+        await resolver.getProcessableOrders();
       expect(canExecAfter).to.be.eq(false);
       const taskDataAfter = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
