@@ -495,8 +495,13 @@ describe("Gamma Redeemer Resolver", () => {
           parseUnits(optionAmount.toString(), optionDecimals),
           0
         );
-      const processableOrders = await resolver.getProcessableOrders();
-      expect(processableOrders.length).to.be.eq(0);
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(false);
+      const taskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[]]
+      );
+      expect(execPayload).to.be.eq(taskData);
     });
     it("should skip finished orders", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
@@ -524,15 +529,28 @@ describe("Gamma Redeemer Resolver", () => {
         true
       );
 
-      const processableOrdersBefore = await resolver.getProcessableOrders();
-      expect(processableOrdersBefore.length).to.be.eq(1);
+      const [canExecBefore, execPayloadBefore] =
+        await resolver.getProcessableOrders();
+      expect(canExecBefore).to.be.eq(true);
+      const taskDataBefore = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[orderId]]
+      );
+      expect(execPayloadBefore).to.be.eq(taskDataBefore);
 
       await gammaRedeemer.connect(deployer).processOrder(orderId);
 
-      const processableOrdersAfter = await resolver.getProcessableOrders();
-      expect(processableOrdersAfter.length).to.be.eq(0);
+      const [canExecAfter, execPayloadAfter] =
+        await resolver.getProcessableOrders();
+      expect(canExecAfter).to.be.eq(false);
+      const taskDataAfter = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[]]
+      );
+      expect(execPayloadAfter).to.be.eq(taskDataAfter);
     });
     it("should skip same order types", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
@@ -571,8 +589,13 @@ describe("Gamma Redeemer Resolver", () => {
         true
       );
 
-      const processableOrders = await resolver.getProcessableOrders();
-      expect(processableOrders.length).to.be.eq(1);
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
+      const taskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[orderId]]
+      );
+      expect(execPayload).to.be.eq(taskData);
     });
     it("should return list of processable orders", async () => {
       const orderId1 = await gammaRedeemer.getOrdersLength();
@@ -612,23 +635,13 @@ describe("Gamma Redeemer Resolver", () => {
         true
       );
 
-      const processableOrders = await resolver.getProcessableOrders();
-      expect(processableOrders.length).to.be.eq(2);
-      expect(
-        processableOrders.findIndex(
-          (orderId: BigNumber) => orderId.toString() === orderId1.toString()
-        )
-      ).to.be.gte(0);
-      expect(
-        processableOrders.findIndex(
-          (orderId: BigNumber) => orderId.toString() === orderId2.toString()
-        )
-      ).to.be.lt(0);
-      expect(
-        processableOrders.findIndex(
-          (orderId: BigNumber) => orderId.toString() === orderId3.toString()
-        )
-      ).to.be.gte(0);
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
+      const taskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[orderId1, orderId3]]
+      );
+      expect(execPayload).to.be.eq(taskData);
     });
   });
 });

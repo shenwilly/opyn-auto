@@ -168,6 +168,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
 
   describe("auto redeem", async () => {
     let buyerOrderId: BigNumber;
+    let buyerOrderId2: BigNumber;
     let sellerOrderId: BigNumber;
     let vaultId: BigNumber;
     before(async () => {
@@ -212,6 +213,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
           parseUnits((optionAmount / 2).toString(), optionDecimals),
           0
         );
+      buyerOrderId2 = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
@@ -242,15 +244,13 @@ describe("Mainnet Fork: Auto Redeem", () => {
         true
       );
 
-      const orderIds = await resolver.getProcessableOrders();
-      expect(orderIds.findIndex((id) => id == buyerOrderId) >= 0);
-      expect(orderIds.findIndex((id) => id == sellerOrderId) >= 0);
-      expect(orderIds.length).to.be.eq(2);
-
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [orderIds]
+        [[buyerOrderId, sellerOrderId]]
       );
+      expect(execPayload).to.be.eq(taskData);
 
       const gelato = await automator.gelato();
       await hre.network.provider.request({
@@ -268,12 +268,15 @@ describe("Mainnet Fork: Auto Redeem", () => {
           taskData
         );
 
-      const secondOrderIds = await resolver.getProcessableOrders();
-      expect(secondOrderIds.length).to.be.eq(1);
-      const secondTaskData = gammaRedeemer.interface.encodeFunctionData(
+      const [canExecSecond, execPayloadSecond] =
+        await resolver.getProcessableOrders();
+      expect(canExecSecond).to.be.eq(true);
+      const taskDataSecond = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [secondOrderIds]
+        [[buyerOrderId2]]
       );
+      expect(execPayloadSecond).to.be.eq(taskDataSecond);
+
       await automator
         .connect(gelatoSigner)
         .exec(
@@ -281,8 +284,17 @@ describe("Mainnet Fork: Auto Redeem", () => {
           ETH_TOKEN_ADDRESS,
           gammaRedeemer.address,
           gammaRedeemer.address,
-          secondTaskData
+          taskDataSecond
         );
+
+      const [canExecFinish, execPayloadFinish] =
+        await resolver.getProcessableOrders();
+      expect(canExecFinish).to.be.eq(false);
+      const taskDataFinish = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [[]]
+      );
+      expect(execPayloadFinish).to.be.eq(taskDataFinish);
 
       const contractBalanceAfter = await usdc.balanceOf(gammaRedeemer.address);
       const buyerBalanceAfter = await usdc.balanceOf(buyerAddress);
