@@ -7,7 +7,7 @@ import {
 
 async function main() {
   const TreasuryAddress = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
-  const GammaRedeemerAddress = "0xa9bC42ac855BE4026cE3Ce031f91C8f796122282"
+  const GammaRedeemerAddress = "0xCD92f7bd79e5b0f7D0E20fE7eFDf3FafB70e3904"
 
   const treasury = (await ethers.getContractAt("TaskTreasury", TreasuryAddress)) as TaskTreasury;
   const tx = await treasury.depositFunds(
