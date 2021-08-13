@@ -9,7 +9,7 @@ import {IResolver} from "./interfaces/IResolver.sol";
 
 /// @author Willy Shen
 /// @title Gamma Automatic Redeemer
-/// @notice An automatic redeemer for Gmma otoken holders and writers
+/// @notice An automatic redeemer for Gamma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
@@ -163,11 +163,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function processOrder(uint256 _orderId) public override onlyAuthorized {
         Order storage order = orders[_orderId];
         require(
-            !order.finished,
-            "GammaRedeemer::processOrder: Order is already finished"
-        );
-
-        require(
             shouldProcessOrder(_orderId),
             "GammaRedeemer::processOrder: Order should not be processed"
         );
@@ -186,7 +181,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @notice process multiple orders
      * @param _orderIds array of order ids to process
      */
-    function processOrders(uint256[] calldata _orderIds) override public {
+    function processOrders(uint256[] calldata _orderIds) public override {
         for (uint256 i = 0; i < _orderIds.length; i++) {
             processOrder(_orderIds[i]);
         }
