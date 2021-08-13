@@ -70,7 +70,8 @@ contract GammaRedeemerResolver is IResolver {
 
     /**
      * @notice return list of processable orderIds
-     * @return an array of orderIds available to process
+     * @return canExec if gelato should execute
+     * @return execPayload the function and data to be executed by gelato 
      * @dev order is processable if:
      * 1. it is profitable to process (shouldProcessOrder)
      * 2. it can be processed without reverting (canProcessOrder)
@@ -80,7 +81,7 @@ contract GammaRedeemerResolver is IResolver {
         public
         view
         override
-        returns (uint256[] memory)
+        returns (bool canExec, bytes memory execPayload)
     {
         IGammaRedeemerV1.Order[] memory orders = IGammaRedeemerV1(redeemer)
             .getOrders();
@@ -101,6 +102,10 @@ contract GammaRedeemerResolver is IResolver {
             }
         }
 
+        if (orderIdsLength > 0) {
+            canExec = true;
+        }
+
         uint256 counter;
         uint256[] memory orderIds = new uint256[](orderIdsLength);
         for (uint256 i = 0; i < orders.length; i++) {
@@ -114,7 +119,11 @@ contract GammaRedeemerResolver is IResolver {
                 counter++;
             }
         }
-        return orderIds;
+
+        execPayload = abi.encodeWithSelector(
+            IGammaRedeemerV1.processOrders.selector,
+            orderIds
+        );
     }
 
     /**

@@ -186,7 +186,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @notice process multiple orders
      * @param _orderIds array of order ids to process
      */
-    function processOrders(uint256[] calldata _orderIds) public {
+    function processOrders(uint256[] calldata _orderIds) override public {
         for (uint256 i = 0; i < _orderIds.length; i++) {
             processOrder(_orderIds[i]);
         }
