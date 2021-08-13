@@ -71,7 +71,7 @@ contract GammaRedeemerResolver is IResolver {
     /**
      * @notice return list of processable orderIds
      * @return canExec if gelato should execute
-     * @return execPayload the function and data to be executed by gelato 
+     * @return execPayload the function and data to be executed by gelato
      * @dev order is processable if:
      * 1. it is profitable to process (shouldProcessOrder)
      * 2. it can be processed without reverting (canProcessOrder)
