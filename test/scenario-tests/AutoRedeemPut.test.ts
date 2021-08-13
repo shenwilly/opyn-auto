@@ -249,14 +249,13 @@ describe("Scenario: Auto Redeem Put", () => {
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
 
-      const orderIds = await resolver.getProcessableOrders();
-      expect(orderIds.findIndex((id) => id == orderId) >= 0);
-      expect(orderIds.length).to.be.eq(1);
-
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
         [[orderId]]
       );
+      expect(taskData).to.be.eq(execPayload);
 
       await automator
         .connect(deployer)
@@ -311,11 +310,13 @@ describe("Scenario: Auto Redeem Put", () => {
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
 
-      const orderIds = await resolver.getProcessableOrders();
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [orderIds]
+        [[orderId]]
       );
+      expect(taskData).to.be.eq(execPayload);
 
       await automator
         .connect(deployer)

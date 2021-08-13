@@ -464,7 +464,7 @@ describe("GammaRedeemer", () => {
 
       await expectRevert(
         gammaRedeemer.processOrder(orderId),
-        "GammaRedeemer::processOrder: Order is already finished"
+        "GammaRedeemer::processOrder: Order should not be processed"
       );
     });
     it("should revert if shouldProcessOrder is false", async () => {
