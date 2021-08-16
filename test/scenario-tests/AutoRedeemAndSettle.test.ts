@@ -62,7 +62,6 @@ describe("Mainnet Fork: Auto Redeem", () => {
   let usdc: Contract;
 
   let ethPut: Otoken;
-
   const strikePrice = "2000";
 
   before("setup contracts", async () => {
