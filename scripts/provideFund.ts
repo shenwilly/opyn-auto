@@ -1,6 +1,6 @@
 import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { ETH_TOKEN_ADDRESS } from "../test/helpers/constants";
+import { ETH_TOKEN_ADDRESS } from "../constants/constants";
 import {
   TaskTreasury
 } from "../typechain";

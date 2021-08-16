@@ -31,7 +31,7 @@ import {
 } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
 import { constants } from "ethers";
-import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
+import { ETH_TOKEN_ADDRESS } from "../../constants/constants";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;

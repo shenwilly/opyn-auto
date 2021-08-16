@@ -20,20 +20,22 @@ import {
   getActionOpenVault,
   setOperator,
 } from "../helpers/setup/GammaSetup";
-import { ETH_TOKEN_ADDRESS } from "../helpers/constants";
+import {
+  ADDRESS_BOOK_ADDRESS,
+  CONTROLLER_ADDRESS,
+  ETH_TOKEN_ADDRESS,
+  MARGIN_POOL_ADDRESS,
+  ORACLE_ADDRESS,
+  POKEME_ADDRESS,
+  TREASURY_ADDRESS,
+  USDC_ADDRESS,
+} from "../../constants/constants";
 import { BigNumber, constants, Contract } from "ethers/lib/ethers";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.AddressZero;
 
-const POKEME_ADDRESS = "0x89a26d08c26E00cE935a775Ba74A984Ad346679b";
-const TREASURY_ADDRESS = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
-const ADDRESS_BOOK_ADDRESS = "0x1E31F2DCBad4dc572004Eae6355fB18F9615cBe4";
-const CONTROLLER_ADDRESS = "0x4ccc2339F87F6c59c6893E1A678c2266cA58dC72";
-const MARGIN_POOL_ADDRESS = "0x5934807cC0654d46755eBd2848840b616256C6Ef";
-const ORACLE_ADDRESS = "0x789cD7AB3742e23Ce0952F6Bc3Eb3A73A0E08833";
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
-const USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
 const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
 
 describe("Mainnet Fork: Auto Redeem", () => {
