@@ -1,4 +1,4 @@
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 import chai from "chai";
 import {
   AddressBook,
@@ -8,14 +8,10 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  GammaRedeemerV1__factory,
   GammaRedeemerV1,
-  PokeMe__factory,
   PokeMe,
-  TaskTreasury__factory,
   TaskTreasury,
   GammaRedeemerResolver,
-  GammaRedeemerResolver__factory,
   Oracle,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -93,6 +89,16 @@ describe("Gamma Redeemer Resolver", () => {
       controller,
     ] = await setupGammaContracts();
 
+    [automator, automatorTreasury] = await setupGelatoContracts();
+    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+      deployer,
+      automator.address,
+      automatorTreasury.address
+    );
+    await gammaRedeemer.startAutomator(resolver.address);
+
+    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
+
     await whitelistCollateral(whitelist, USDC_ADDRESS);
     await whitelistCollateral(whitelist, WETH_ADDRESS);
     await whitelistProduct(
@@ -109,16 +115,6 @@ describe("Gamma Redeemer Resolver", () => {
       WETH_ADDRESS,
       false
     );
-
-    [automator, automatorTreasury] = await setupGelatoContracts();
-    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
-      deployer,
-      automator.address,
-      automatorTreasury.address
-    );
-    await gammaRedeemer.startAutomator(resolver.address);
-
-    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1000);
