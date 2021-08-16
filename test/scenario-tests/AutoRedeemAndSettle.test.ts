@@ -4,12 +4,10 @@ import {
   Controller,
   Otoken,
   MarginPool,
-  GammaRedeemerV1__factory,
   GammaRedeemerV1,
   PokeMe,
   TaskTreasury,
   GammaRedeemerResolver,
-  GammaRedeemerResolver__factory,
   Oracle,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -22,13 +20,7 @@ import {
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import {
-  ADDRESS_BOOK_ADDRESS,
-  CONTROLLER_ADDRESS,
   ETH_TOKEN_ADDRESS,
-  MARGIN_POOL_ADDRESS,
-  ORACLE_ADDRESS,
-  POKEME_ADDRESS,
-  TREASURY_ADDRESS,
   USDC_ADDRESS,
   WETH_ADDRESS,
 } from "../../constants/address";
@@ -102,7 +94,6 @@ describe("Mainnet Fork: Auto Redeem", () => {
 
     const usdcWalletSigner = await ethers.getSigner(USDC_WALLET);
     await usdc.connect(usdcWalletSigner).transfer(sellerAddress, usdcAmount);
-
     await usdc.connect(seller).approve(marginPool.address, usdcAmount);
 
     const vaultId = (
@@ -155,34 +146,6 @@ describe("Mainnet Fork: Auto Redeem", () => {
         expiry,
         parseUnits(strikePrice, STRIKE_PRICE_DECIMALS)
       );
-      // const owner = await oracle.owner();
-      // await hre.network.provider.request({
-      //   method: "hardhat_impersonateAccount",
-      //   params: [owner],
-      // });
-      // const ownerSigner = await ethers.getSigner(owner);
-
-      // await deployer.sendTransaction({
-      //   to: owner,
-      //   value: parseEther("1"),
-      // });
-
-      // await oracle
-      //   .connect(ownerSigner)
-      //   .setAssetPricer("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", owner);
-      // await oracle
-      //   .connect(ownerSigner)
-      //   .setExpiryPrice(
-      //     "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-      //     expiry,
-      //     parseUnits("2000", strikePriceDecimals)
-      //   );
-      // await oracle
-      //   .connect(ownerSigner)
-      //   .setStablePrice(
-      //     "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-      //     parseUnits("1", strikePriceDecimals)
-      //   );
 
       buyerOrderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
