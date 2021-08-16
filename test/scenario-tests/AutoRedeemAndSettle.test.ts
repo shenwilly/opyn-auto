@@ -12,13 +12,7 @@ import {
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
-import {
-  getActionDepositCollateral,
-  getActionMintShort,
-  getActionOpenVault,
-  setOperator,
-  setupGammaContracts,
-} from "../helpers/setup/GammaSetup";
+import { setupGammaContracts } from "../helpers/setup/GammaSetup";
 import {
   ETH_TOKEN_ADDRESS,
   USDC_ADDRESS,
@@ -35,7 +29,13 @@ import {
 import { BigNumber, Contract } from "ethers/lib/ethers";
 import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
 import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
-import { setExpiryPriceAndEndDisputePeriod } from "../helpers/utils/GammaUtils";
+import {
+  getActionDepositCollateral,
+  getActionMintShort,
+  getActionOpenVault,
+  setOperator,
+  setExpiryPriceAndEndDisputePeriod,
+} from "../helpers/utils/GammaUtils";
 
 const { expect } = chai;
 

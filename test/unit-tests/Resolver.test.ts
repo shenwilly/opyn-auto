@@ -16,18 +16,16 @@ import {
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
-import {
-  getActionDepositCollateral,
-  getActionMintShort,
-  getActionOpenVault,
-  setOperator,
-  setupGammaContracts,
-} from "../helpers/setup/GammaSetup";
+import { setupGammaContracts } from "../helpers/setup/GammaSetup";
 import { BigNumber, Contract } from "ethers/lib/ethers";
 import { createValidExpiry } from "../helpers/utils/time";
 import { USDC_ADDRESS, WETH_ADDRESS, ZERO_ADDR } from "../../constants/address";
 import { mintUsdc } from "../helpers/utils/token";
 import {
+  getActionDepositCollateral,
+  getActionMintShort,
+  getActionOpenVault,
+  setOperator,
   getOrCreateOtoken,
   setExpiryPriceAndEndDisputePeriod,
   whitelistCollateral,
@@ -119,7 +117,7 @@ describe("Gamma Redeemer Resolver", () => {
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1000);
 
-    const ethPutAddress = await getOrCreateOtoken(
+    ethPut = await getOrCreateOtoken(
       otokenFactory,
       WETH_ADDRESS,
       USDC_ADDRESS,
@@ -128,7 +126,6 @@ describe("Gamma Redeemer Resolver", () => {
       expiry,
       true
     );
-    ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
 
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });

@@ -16,13 +16,7 @@ import {
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
-import {
-  getActionDepositCollateral,
-  getActionMintShort,
-  getActionOpenVault,
-  setOperator,
-  setupGammaContracts,
-} from "../helpers/setup/GammaSetup";
+import { setupGammaContracts } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
 import { constants, Contract } from "ethers";
 import { createValidExpiry } from "../helpers/utils/time";
@@ -39,9 +33,14 @@ import {
   USDC_DECIMALS,
 } from "../../constants/decimals";
 import {
+  getActionDepositCollateral,
+  getActionMintShort,
+  getActionOpenVault,
+  setOperator,
   setExpiryPriceAndEndDisputePeriod,
   whitelistCollateral,
   whitelistProduct,
+  getOrCreateOtoken,
 } from "../helpers/utils/GammaUtils";
 import { mintUsdc } from "../helpers/utils/token";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
@@ -127,7 +126,8 @@ describe("GammaRedeemer", () => {
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 7);
 
-    await otokenFactory.createOtoken(
+    ethPut = await getOrCreateOtoken(
+      otokenFactory,
       WETH_ADDRESS,
       USDC_ADDRESS,
       USDC_ADDRESS,
@@ -135,16 +135,6 @@ describe("GammaRedeemer", () => {
       expiry,
       true
     );
-    const ethPutAddress = await otokenFactory.getOtoken(
-      WETH_ADDRESS,
-      USDC_ADDRESS,
-      USDC_ADDRESS,
-      parseUnits(strikePrice.toString(), STRIKE_PRICE_DECIMALS),
-      expiry,
-      true
-    );
-
-    ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
 
     // mint usdc to user
     const initialAmountUsdc = parseUnits(
