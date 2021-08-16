@@ -11,6 +11,3 @@ import {MarginPool} from "gamma-protocol/contracts/core/MarginPool.sol";
 import {MarginCalculator} from "gamma-protocol/contracts/core/MarginCalculator.sol";
 import {MarginVault} from "gamma-protocol/contracts/libs/MarginVault.sol";
 import {Controller} from "gamma-protocol/contracts/core/Controller.sol";
-
-import {MockERC20} from "gamma-protocol/contracts/mocks/MockERC20.sol";
-import {MockOracle} from "gamma-protocol/contracts/mocks/MockOracle.sol";
