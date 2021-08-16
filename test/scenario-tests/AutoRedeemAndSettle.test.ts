@@ -34,7 +34,7 @@ import {
 import { BigNumber, constants, Contract } from "ethers/lib/ethers";
 import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
 import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
-import { setExpiryPrice } from "../helpers/utils/GammaUtils";
+import { setExpiryPriceAndEndDisputePeriod } from "../helpers/utils/GammaUtils";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.AddressZero;
@@ -140,7 +140,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await setExpiryPrice(
+      await setExpiryPriceAndEndDisputePeriod(
         oracle,
         WETH_ADDRESS,
         expiry,
