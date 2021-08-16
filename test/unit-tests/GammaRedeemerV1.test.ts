@@ -8,18 +8,12 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  MockOracle,
-  MockERC20,
-  MockERC20__factory,
-  GammaRedeemerV1__factory,
   GammaRedeemerV1,
-  PokeMe__factory,
-  GammaRedeemerResolver__factory,
   GammaRedeemerResolver,
-  TaskTreasury__factory,
   TaskTreasury,
+  Oracle,
+  PokeMe,
 } from "../../typechain";
-import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
 import {
@@ -30,8 +24,26 @@ import {
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import { BigNumber } from "@ethersproject/bignumber";
-import { constants } from "ethers";
-import { ETH_TOKEN_ADDRESS } from "../../constants/constants";
+import { constants, Contract } from "ethers";
+import { createValidExpiry } from "../helpers/utils/time";
+import {
+  ETH_TOKEN_ADDRESS,
+  USDC_ADDRESS,
+  WETH_ADDRESS,
+} from "../../constants/address";
+import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
+import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
+import {
+  OTOKEN_DECIMALS,
+  STRIKE_PRICE_DECIMALS,
+  USDC_DECIMALS,
+} from "../../constants/decimals";
+import {
+  setExpiryPriceAndEndDisputePeriod,
+  whitelistCollateral,
+  whitelistProduct,
+} from "../helpers/utils/GammaUtils";
+import { mintUsdc } from "../helpers/utils/token";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -50,16 +62,14 @@ describe("GammaRedeemer", () => {
   let whitelist: Whitelist;
   let marginPool: MarginPool;
   let calculator: MarginCalculator;
-  let oracle: MockOracle;
+  let oracle: Oracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
   let resolver: GammaRedeemerResolver;
+  let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
-  let expiry: number;
-  let usdc: MockERC20;
-  let weth: MockERC20;
-
+  let usdc: Contract;
   let ethPut: Otoken;
 
   const strikePrice = 300;
@@ -69,10 +79,8 @@ describe("GammaRedeemer", () => {
   const collateralAmount = optionsAmount * strikePrice;
   const optionAmount = 1;
 
-  const strikePriceDecimals = 8;
-  const optionDecimals = 8;
-  const usdcDecimals = 6;
-  const wethDecimals = 18;
+  let expiry: number;
+  let snapshotId: string;
 
   before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
@@ -88,70 +96,50 @@ describe("GammaRedeemer", () => {
       marginPool,
       calculator,
       controller,
-    ] = await setupGammaContracts(deployer);
+    ] = await setupGammaContracts();
 
-    // setup usdc and weth
-    const mockERC20Factory = (await ethers.getContractFactory(
-      "MockERC20"
-    )) as MockERC20__factory;
-    usdc = await mockERC20Factory.deploy("USDC", "USDC", usdcDecimals);
-    weth = await mockERC20Factory.deploy("WETH", "WETH", wethDecimals);
-
-    // setup whitelist
-    await whitelist.whitelistCollateral(usdc.address);
-    await whitelist.whitelistCollateral(weth.address);
-    whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
-    whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
-
-    // deploy Vault Operator
-    const PokeMeFactory = (await ethers.getContractFactory(
-      "PokeMe",
-      deployer
-    )) as PokeMe__factory;
-    const automator = await PokeMeFactory.deploy(
-      deployerAddress,
-      deployerAddress
-    );
-
-    const TaskTreasuryFactory = (await ethers.getContractFactory(
-      "TaskTreasury",
-      buyer
-    )) as TaskTreasury__factory;
-    automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
-
-    // deploy Vault Operator
-    const GammaRedeemerFactory = (await ethers.getContractFactory(
-      "GammaRedeemerV1",
-      deployer
-    )) as GammaRedeemerV1__factory;
-    gammaRedeemer = await GammaRedeemerFactory.deploy(
-      addressBook.address,
+    [automator, automatorTreasury] = await setupGelatoContracts();
+    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+      deployer,
       automator.address,
       automatorTreasury.address
     );
 
-    const ResolverFactory = (await ethers.getContractFactory(
-      "GammaRedeemerResolver",
-      buyer
-    )) as GammaRedeemerResolver__factory;
-    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
+
+    await whitelistCollateral(whitelist, USDC_ADDRESS);
+    await whitelistCollateral(whitelist, WETH_ADDRESS);
+    await whitelistProduct(
+      whitelist,
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      USDC_ADDRESS,
+      true
+    );
+    await whitelistProduct(
+      whitelist,
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      WETH_ADDRESS,
+      false
+    );
 
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 7);
 
     await otokenFactory.createOtoken(
-      weth.address,
-      usdc.address,
-      usdc.address,
-      parseUnits(strikePrice.toString(), strikePriceDecimals),
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      USDC_ADDRESS,
+      parseUnits(strikePrice.toString(), STRIKE_PRICE_DECIMALS),
       expiry,
       true
     );
     const ethPutAddress = await otokenFactory.getOtoken(
-      weth.address,
-      usdc.address,
-      usdc.address,
-      parseUnits(strikePrice.toString(), strikePriceDecimals),
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      USDC_ADDRESS,
+      parseUnits(strikePrice.toString(), STRIKE_PRICE_DECIMALS),
       expiry,
       true
     );
@@ -161,9 +149,9 @@ describe("GammaRedeemer", () => {
     // mint usdc to user
     const initialAmountUsdc = parseUnits(
       collateralAmount.toString(),
-      usdcDecimals
+      USDC_DECIMALS
     ).mul(2);
-    await usdc.mint(sellerAddress, initialAmountUsdc);
+    await mintUsdc(initialAmountUsdc, sellerAddress);
     await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
 
     const vaultId = (
@@ -174,14 +162,14 @@ describe("GammaRedeemer", () => {
       getActionDepositCollateral(
         sellerAddress,
         vaultId.toString(),
-        usdc.address,
-        parseUnits(collateralAmount.toString(), usdcDecimals)
+        USDC_ADDRESS,
+        parseUnits(collateralAmount.toString(), USDC_DECIMALS)
       ),
       getActionMintShort(
         sellerAddress,
         vaultId.toString(),
         ethPut.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       ),
     ];
     await controller.connect(seller).operate(actions);
@@ -189,18 +177,24 @@ describe("GammaRedeemer", () => {
       .connect(seller)
       .transfer(
         buyerAddress,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
 
     await ethPut
       .connect(buyer)
       .approve(
         gammaRedeemer.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
-
     await gammaRedeemer.connect(deployer).startAutomator(resolver.address);
+
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
+  });
+
+  beforeEach(async () => {
+    await ethers.provider.send("evm_revert", [snapshotId]);
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
   describe("createOrder()", async () => {
@@ -210,7 +204,7 @@ describe("GammaRedeemer", () => {
           .connect(buyer)
           .createOrder(
             buyerAddress,
-            parseUnits(optionAmount.toString(), optionDecimals),
+            parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
             0
           ),
         "GammaRedeemer::createOrder: Otoken not whitelisted"
@@ -222,7 +216,7 @@ describe("GammaRedeemer", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
       const receipt = await tx.wait();
@@ -244,7 +238,7 @@ describe("GammaRedeemer", () => {
       expect(orderOwner).to.be.eq(buyerAddress);
       expect(orderOtoken).to.be.eq(ethPut.address);
       expect(orderAmount).to.be.eq(
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
@@ -286,11 +280,16 @@ describe("GammaRedeemer", () => {
 
   describe("cancelOrder()", async () => {
     let orderId: BigNumber;
-    before(async () => {
+
+    beforeEach(async () => {
       orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
     });
+
     it("should revert if sender is not owner", async () => {
+      orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
+
       await expectRevert(
         gammaRedeemer.connect(buyer).cancelOrder(orderId),
         "GammaRedeemer::cancelOrder: Sender is not order owner"
@@ -319,22 +318,16 @@ describe("GammaRedeemer", () => {
   });
 
   describe("shouldProcessOrder()", async () => {
-    const amount = parseUnits(optionAmount.toString(), optionDecimals);
-    before(async () => {
+    const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+    beforeEach(async () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(expiryPriceITM.toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(expiryPriceITM.toString(), STRIKE_PRICE_DECIMALS)
       );
     });
 
@@ -385,78 +378,18 @@ describe("GammaRedeemer", () => {
   });
 
   describe("processOrder()", async () => {
-    let ethPut: Otoken;
-    before(async () => {
-      const now = (await time.latest()).toNumber();
-      expiry = createValidExpiry(now, 7);
-
-      await otokenFactory.createOtoken(
-        weth.address,
-        usdc.address,
-        usdc.address,
-        parseUnits(strikePrice.toString(), strikePriceDecimals),
-        expiry,
-        true
-      );
-      const ethPutAddress = await otokenFactory.getOtoken(
-        weth.address,
-        usdc.address,
-        usdc.address,
-        parseUnits(strikePrice.toString(), strikePriceDecimals),
-        expiry,
-        true
-      );
-
-      ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
-      const vaultId = (
-        await controller.getAccountVaultCounter(sellerAddress)
-      ).add(1);
-      const actions = [
-        getActionOpenVault(sellerAddress, vaultId.toString()),
-        getActionDepositCollateral(
-          sellerAddress,
-          vaultId.toString(),
-          usdc.address,
-          parseUnits(collateralAmount.toString(), usdcDecimals)
-        ),
-        getActionMintShort(
-          sellerAddress,
-          vaultId.toString(),
-          ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        ),
-      ];
-      await controller.connect(seller).operate(actions);
-      await ethPut
-        .connect(seller)
-        .transfer(
-          buyerAddress,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        );
-
-      await ethPut
-        .connect(buyer)
-        .approve(
-          gammaRedeemer.address,
-          parseUnits(optionAmount.toString(), optionDecimals)
-        );
-
+    beforeEach(async () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(expiryPriceITM.toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(expiryPriceITM.toString(), STRIKE_PRICE_DECIMALS)
       );
     });
+
     it("should revert if order is already finished", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
@@ -473,7 +406,7 @@ describe("GammaRedeemer", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -481,7 +414,7 @@ describe("GammaRedeemer", () => {
       await expect(gammaRedeemer.processOrder(orderId)).to.be.reverted;
     });
     it("should redeemOtoken if isSeller is false", async () => {
-      const amount = parseUnits(optionAmount.toString(), optionDecimals);
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
 
@@ -496,18 +429,7 @@ describe("GammaRedeemer", () => {
       await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 1);
 
       await setOperator(seller, controller, gammaRedeemer.address, true);
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
-        expiry,
-        parseUnits(expiryPriceOTM.toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
-      );
+
       const balanceBefore = await usdc.balanceOf(sellerAddress);
       await gammaRedeemer.connect(deployer).processOrder(orderId);
       const balanceAfter = await usdc.balanceOf(sellerAddress);
@@ -517,7 +439,7 @@ describe("GammaRedeemer", () => {
 
   describe("withdrawFunds()", async () => {
     const amount = parseEther("1");
-    before(async () => {
+    beforeEach(async () => {
       await automatorTreasury.depositFunds(
         gammaRedeemer.address,
         ETH_TOKEN_ADDRESS,
@@ -527,6 +449,7 @@ describe("GammaRedeemer", () => {
         }
       );
     });
+
     it("should revert if sender is not owner", async () => {
       await expectRevert(
         gammaRedeemer.connect(buyer).withdrawFund(ETH_TOKEN_ADDRESS, amount),
