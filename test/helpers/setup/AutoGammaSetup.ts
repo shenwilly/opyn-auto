@@ -6,8 +6,6 @@ import {
   GammaRedeemerResolver__factory,
   GammaRedeemerV1,
   GammaRedeemerV1__factory,
-  PokeMe,
-  TaskTreasury,
 } from "../../../typechain";
 
 type AutoGammaContracts = [GammaRedeemerV1, GammaRedeemerResolver];

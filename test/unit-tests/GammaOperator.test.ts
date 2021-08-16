@@ -8,11 +8,8 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  MockOracle,
-  MockERC20,
   GammaOperatorWrapper__factory,
   GammaOperatorWrapper,
-  MockERC20__factory,
   Oracle,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";

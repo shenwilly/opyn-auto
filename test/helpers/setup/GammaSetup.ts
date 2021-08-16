@@ -1,5 +1,3 @@
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { BigNumber, BigNumberish, constants } from "ethers/lib/ethers";
 import { ethers } from "hardhat";
 import {
   ADDRESS_BOOK_ADDRESS,
@@ -12,11 +10,8 @@ import {
   MarginCalculator,
   Controller,
   OtokenFactory,
-  Otoken,
   Oracle,
 } from "../../../typechain";
-import { ActionArgs, ActionType } from "../types/GammaTypes";
-const ZERO_ADDR = constants.AddressZero;
 
 type GammaContracts = [
   AddressBook,
