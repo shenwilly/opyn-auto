@@ -22,6 +22,7 @@ import {
 import {
   ETH_TOKEN_ADDRESS,
   USDC_ADDRESS,
+  USDC_WALLET,
   WETH_ADDRESS,
 } from "../../constants/address";
 import {
@@ -40,7 +41,6 @@ const ZERO_ADDR = constants.AddressZero;
 
 // oWETHUSDC/USDC-20AUG21-2300P
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
-const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
 
 describe("Mainnet Fork: Auto Redeem", () => {
   let deployer: SignerWithAddress;
@@ -79,6 +79,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
     ethPut = (await ethers.getContractAt("Otoken", OTOKEN_ADDRESS)) as Otoken;
 
     usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
+
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
       params: [USDC_WALLET],

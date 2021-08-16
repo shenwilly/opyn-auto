@@ -14,3 +14,6 @@ export const WETH_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 
 // Dummy ETH token address for Gelato
 export const ETH_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+// Large token holders
+export const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
