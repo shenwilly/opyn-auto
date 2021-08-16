@@ -24,6 +24,7 @@ import {
   USDC_ADDRESS,
   USDC_WALLET,
   WETH_ADDRESS,
+  ZERO_ADDR,
 } from "../../constants/address";
 import {
   OTOKEN_DECIMALS,
@@ -31,13 +32,12 @@ import {
   USDC_DECIMALS,
 } from "../../constants/decimals";
 
-import { BigNumber, constants, Contract } from "ethers/lib/ethers";
+import { BigNumber, Contract } from "ethers/lib/ethers";
 import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
 import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
 import { setExpiryPriceAndEndDisputePeriod } from "../helpers/utils/GammaUtils";
 
 const { expect } = chai;
-const ZERO_ADDR = constants.AddressZero;
 
 // oWETHUSDC/USDC-20AUG21-2300P
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
@@ -58,11 +58,11 @@ describe("Mainnet Fork: Auto Redeem", () => {
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
-  let expiry: number;
   let usdc: Contract;
-
   let ethPut: Otoken;
+
   const strikePrice = "2000";
+  let expiry: number;
 
   before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();

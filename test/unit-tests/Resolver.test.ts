@@ -39,6 +39,11 @@ import {
 } from "../helpers/utils/GammaUtils";
 import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
 import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
+import {
+  OTOKEN_DECIMALS,
+  STRIKE_PRICE_DECIMALS,
+  USDC_DECIMALS,
+} from "../../constants/decimals";
 const { time } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -62,23 +67,15 @@ describe("Gamma Redeemer Resolver", () => {
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
-  let expiry: number;
   let usdc: Contract;
-
   let ethPut: Otoken;
 
   const strikePrice = 300;
-  const expiryPriceITM = 200;
-  const expiryPriceOTM = 400;
   const optionsAmount = 10;
   const collateralAmount = optionsAmount * strikePrice;
   const optionAmount = 1;
 
-  const strikePriceDecimals = 8;
-  const optionDecimals = 8;
-  const usdcDecimals = 6;
-  const wethDecimals = 18;
-
+  let expiry: number;
   let snapshotId: string;
 
   before("setup contracts", async () => {
@@ -131,7 +128,7 @@ describe("Gamma Redeemer Resolver", () => {
       WETH_ADDRESS,
       USDC_ADDRESS,
       USDC_ADDRESS,
-      parseUnits(strikePrice.toString(), strikePriceDecimals),
+      parseUnits(strikePrice.toString(), STRIKE_PRICE_DECIMALS),
       expiry,
       true
     );
@@ -146,7 +143,7 @@ describe("Gamma Redeemer Resolver", () => {
 
     const initialAmountUsdc = parseUnits(
       collateralAmount.toString(),
-      usdcDecimals
+      USDC_DECIMALS
     ).mul(2);
     await mintUsdc(initialAmountUsdc, sellerAddress);
     await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
@@ -160,13 +157,13 @@ describe("Gamma Redeemer Resolver", () => {
         sellerAddress,
         vaultId.toString(),
         usdc.address,
-        parseUnits(collateralAmount.toString(), usdcDecimals)
+        parseUnits(collateralAmount.toString(), USDC_DECIMALS)
       ),
       getActionMintShort(
         sellerAddress,
         vaultId.toString(),
         ethPut.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       ),
     ];
     await controller.connect(seller).operate(actions);
@@ -175,14 +172,14 @@ describe("Gamma Redeemer Resolver", () => {
       .connect(seller)
       .transfer(
         buyerAddress,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
 
     await ethPut
       .connect(buyer)
       .approve(
         gammaRedeemer.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
   });
@@ -194,7 +191,7 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -257,7 +254,7 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -267,7 +264,7 @@ describe("Gamma Redeemer Resolver", () => {
         oracle,
         WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
       );
 
       expect(
@@ -299,7 +296,7 @@ describe("Gamma Redeemer Resolver", () => {
         oracle,
         WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
       );
 
       expect(
@@ -455,7 +452,7 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
       const [canExec, execPayload] = await resolver.getProcessableOrders();
@@ -472,7 +469,7 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -483,7 +480,7 @@ describe("Gamma Redeemer Resolver", () => {
         oracle,
         WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
       );
 
       const [canExecBefore, execPayloadBefore] =
@@ -512,21 +509,21 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -537,7 +534,7 @@ describe("Gamma Redeemer Resolver", () => {
         oracle,
         WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
       );
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
@@ -554,14 +551,14 @@ describe("Gamma Redeemer Resolver", () => {
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
-          parseUnits(optionAmount.toString(), optionDecimals),
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
           0
         );
 
@@ -576,7 +573,7 @@ describe("Gamma Redeemer Resolver", () => {
         oracle,
         WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
       );
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
