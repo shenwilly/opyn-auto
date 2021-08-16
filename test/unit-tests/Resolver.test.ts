@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import chai from "chai";
 import {
   AddressBook,
@@ -8,44 +8,45 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  MockOracle,
-  MockERC20,
-  MockERC20__factory,
   GammaRedeemerV1__factory,
   GammaRedeemerV1,
-  GammaOperator,
   PokeMe__factory,
   PokeMe,
   TaskTreasury__factory,
   TaskTreasury,
   GammaRedeemerResolver,
   GammaRedeemerResolver__factory,
+  Oracle,
 } from "../../typechain";
-import { createValidExpiry } from "../helpers/utils";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseUnits } from "ethers/lib/utils";
 import {
-  createOtoken,
   getActionDepositCollateral,
   getActionMintShort,
   getActionOpenVault,
   setOperator,
   setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
-import { ActionType } from "../helpers/types/GammaTypes";
-import { BigNumber } from "@ethersproject/bignumber";
-import { ETH_TOKEN_ADDRESS } from "../../constants/constants";
-import { constants } from "ethers/lib/ethers";
-const { time, expectRevert } = require("@openzeppelin/test-helpers");
+import { BigNumber, Contract } from "ethers/lib/ethers";
+import { createValidExpiry } from "../helpers/utils/time";
+import { USDC_ADDRESS, WETH_ADDRESS, ZERO_ADDR } from "../../constants/address";
+import { mintUsdc } from "../helpers/utils/token";
+import {
+  getOrCreateOtoken,
+  setExpiryPriceAndEndDisputePeriod,
+  whitelistCollateral,
+  whitelistProduct,
+} from "../helpers/utils/GammaUtils";
+import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
+import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
+const { time } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
-const ZERO_ADDR = constants.AddressZero;
 
 describe("Gamma Redeemer Resolver", () => {
   let deployer: SignerWithAddress;
   let buyer: SignerWithAddress;
   let seller: SignerWithAddress;
-  let deployerAddress: string;
   let buyerAddress: string;
   let sellerAddress: string;
 
@@ -54,7 +55,7 @@ describe("Gamma Redeemer Resolver", () => {
   let whitelist: Whitelist;
   let marginPool: MarginPool;
   let calculator: MarginCalculator;
-  let oracle: MockOracle;
+  let oracle: Oracle;
   let controller: Controller;
   let gammaRedeemer: GammaRedeemerV1;
   let resolver: GammaRedeemerResolver;
@@ -62,8 +63,7 @@ describe("Gamma Redeemer Resolver", () => {
   let automatorTreasury: TaskTreasury;
 
   let expiry: number;
-  let usdc: MockERC20;
-  let weth: MockERC20;
+  let usdc: Contract;
 
   let ethPut: Otoken;
 
@@ -79,9 +79,10 @@ describe("Gamma Redeemer Resolver", () => {
   const usdcDecimals = 6;
   const wethDecimals = 18;
 
-  beforeEach("setup contracts", async () => {
+  let snapshotId: string;
+
+  before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
-    deployerAddress = deployer.address;
     buyerAddress = buyer.address;
     sellerAddress = seller.address;
 
@@ -93,85 +94,61 @@ describe("Gamma Redeemer Resolver", () => {
       marginPool,
       calculator,
       controller,
-    ] = await setupGammaContracts(deployer);
+    ] = await setupGammaContracts();
 
-    // setup usdc and weth
-    const mockERC20Factory = (await ethers.getContractFactory(
-      "MockERC20"
-    )) as MockERC20__factory;
-    usdc = await mockERC20Factory.deploy("USDC", "USDC", usdcDecimals);
-    weth = await mockERC20Factory.deploy("WETH", "WETH", wethDecimals);
-
-    // setup whitelist
-    await whitelist.whitelistCollateral(usdc.address);
-    await whitelist.whitelistCollateral(weth.address);
-    whitelist.whitelistProduct(weth.address, usdc.address, usdc.address, true);
-    whitelist.whitelistProduct(weth.address, usdc.address, weth.address, false);
-
-    const TaskTreasuryFactory = (await ethers.getContractFactory(
-      "TaskTreasury",
-      deployer
-    )) as TaskTreasury__factory;
-    automatorTreasury = await TaskTreasuryFactory.deploy(deployerAddress);
-
-    // deploy Vault Operator
-    const PokeMeFactory = (await ethers.getContractFactory(
-      "PokeMe",
-      deployer
-    )) as PokeMe__factory;
-    automator = await PokeMeFactory.deploy(
-      deployerAddress,
-      automatorTreasury.address
+    await whitelistCollateral(whitelist, USDC_ADDRESS);
+    await whitelistCollateral(whitelist, WETH_ADDRESS);
+    await whitelistProduct(
+      whitelist,
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      USDC_ADDRESS,
+      true
     );
-    await automatorTreasury.addWhitelistedService(automator.address);
+    await whitelistProduct(
+      whitelist,
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      WETH_ADDRESS,
+      false
+    );
 
-    // deploy Vault Operator
-    const GammaRedeemerFactory = (await ethers.getContractFactory(
-      "GammaRedeemerV1",
-      deployer
-    )) as GammaRedeemerV1__factory;
-    gammaRedeemer = await GammaRedeemerFactory.deploy(
-      addressBook.address,
+    [automator, automatorTreasury] = await setupGelatoContracts();
+    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+      deployer,
       automator.address,
       automatorTreasury.address
     );
+    await gammaRedeemer.startAutomator(resolver.address);
 
-    const ResolverFactory = (await ethers.getContractFactory(
-      "GammaRedeemerResolver",
-      deployer
-    )) as GammaRedeemerResolver__factory;
-    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
-  });
+    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
 
-  beforeEach(async () => {
     const now = (await time.latest()).toNumber();
     expiry = createValidExpiry(now, 1000);
 
-    await otokenFactory.createOtoken(
-      weth.address,
-      usdc.address,
-      usdc.address,
+    const ethPutAddress = await getOrCreateOtoken(
+      otokenFactory,
+      WETH_ADDRESS,
+      USDC_ADDRESS,
+      USDC_ADDRESS,
       parseUnits(strikePrice.toString(), strikePriceDecimals),
       expiry,
       true
     );
-    const ethPutAddress = await otokenFactory.getOtoken(
-      weth.address,
-      usdc.address,
-      usdc.address,
-      parseUnits(strikePrice.toString(), strikePriceDecimals),
-      expiry,
-      true
-    );
-
     ethPut = (await ethers.getContractAt("Otoken", ethPutAddress)) as Otoken;
 
-    // mint usdc to user
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
+  });
+
+  beforeEach(async () => {
+    await ethers.provider.send("evm_revert", [snapshotId]);
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
+
     const initialAmountUsdc = parseUnits(
       collateralAmount.toString(),
       usdcDecimals
     ).mul(2);
-    await usdc.mint(sellerAddress, initialAmountUsdc);
+    await mintUsdc(initialAmountUsdc, sellerAddress);
     await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
 
     const vaultId = (
@@ -193,6 +170,7 @@ describe("Gamma Redeemer Resolver", () => {
       ),
     ];
     await controller.connect(seller).operate(actions);
+
     await ethPut
       .connect(seller)
       .transfer(
@@ -207,8 +185,6 @@ describe("Gamma Redeemer Resolver", () => {
         parseUnits(optionAmount.toString(), optionDecimals)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
-
-    await gammaRedeemer.startAutomator(resolver.address);
   });
 
   describe("canProcessOrder()", async () => {
@@ -287,18 +263,11 @@ describe("Gamma Redeemer Resolver", () => {
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
-
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
       );
 
       expect(
@@ -326,17 +295,11 @@ describe("Gamma Redeemer Resolver", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
       );
 
       expect(
@@ -516,17 +479,11 @@ describe("Gamma Redeemer Resolver", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
       );
 
       const [canExecBefore, execPayloadBefore] =
@@ -576,17 +533,11 @@ describe("Gamma Redeemer Resolver", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
       );
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
@@ -606,7 +557,6 @@ describe("Gamma Redeemer Resolver", () => {
           parseUnits(optionAmount.toString(), optionDecimals),
           0
         );
-      const orderId2 = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
@@ -622,17 +572,11 @@ describe("Gamma Redeemer Resolver", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        weth.address,
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
         expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals),
-        true
-      );
-      await oracle.setExpiryPriceFinalizedAllPeiodOver(
-        usdc.address,
-        expiry,
-        parseUnits("1", strikePriceDecimals),
-        true
+        parseUnits(((strikePrice * 98) / 100).toString(), strikePriceDecimals)
       );
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
