@@ -78,6 +78,7 @@ describe("GammaRedeemer", () => {
   const collateralAmount = optionsAmount * strikePrice;
   const optionAmount = 1;
 
+  let vaultId: BigNumber;
   let expiry: number;
   let snapshotId: string;
 
@@ -144,9 +145,7 @@ describe("GammaRedeemer", () => {
     await mintUsdc(initialAmountUsdc, sellerAddress);
     await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
 
-    const vaultId = (
-      await controller.getAccountVaultCounter(sellerAddress)
-    ).add(1);
+    vaultId = (await controller.getAccountVaultCounter(sellerAddress)).add(1);
     const actions = [
       getActionOpenVault(sellerAddress, vaultId.toString()),
       getActionDepositCollateral(
@@ -416,7 +415,7 @@ describe("GammaRedeemer", () => {
     });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 1);
+      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
 
       await setOperator(seller, controller, gammaRedeemer.address, true);
 
