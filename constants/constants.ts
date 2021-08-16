@@ -10,6 +10,7 @@ export const ORACLE_ADDRESS = "0x789cD7AB3742e23Ce0952F6Bc3Eb3A73A0E08833";
 
 // Token addresses
 export const USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+export const WETH_ADDRESS = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 
 // Dummy ETH token address for Gelato
 export const ETH_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
