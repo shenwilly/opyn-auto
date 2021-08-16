@@ -19,6 +19,7 @@ import {
   getActionMintShort,
   getActionOpenVault,
   setOperator,
+  setupGammaContracts,
 } from "../helpers/setup/GammaSetup";
 import {
   ADDRESS_BOOK_ADDRESS,
@@ -29,13 +30,25 @@ import {
   POKEME_ADDRESS,
   TREASURY_ADDRESS,
   USDC_ADDRESS,
-} from "../../constants/constants";
+  WETH_ADDRESS,
+} from "../../constants/address";
+import {
+  OTOKEN_DECIMALS,
+  STRIKE_PRICE_DECIMALS,
+  USDC_DECIMALS,
+} from "../../constants/decimals";
+
 import { BigNumber, constants, Contract } from "ethers/lib/ethers";
+import { setupGelatoContracts } from "../helpers/setup/GelatoSetup";
+import { setupAutoGammaContracts } from "../helpers/setup/AutoGammaSetup";
+import { setExpiryPrice } from "../helpers/utils/GammaUtils";
 
 const { expect } = chai;
 const ZERO_ADDR = constants.AddressZero;
 
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
+
+// oWETHUSDC/USDC-20AUG21-2300P
 const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
 
 describe("Mainnet Fork: Auto Redeem", () => {
@@ -59,74 +72,38 @@ describe("Mainnet Fork: Auto Redeem", () => {
 
   let ethPut: Otoken;
 
-  const strikePrice = 2300;
-  const optionAmount = 2;
-  const collateralAmount = optionAmount * strikePrice;
-
-  const strikePriceDecimals = 8;
-  const optionDecimals = 8;
-  const usdcDecimals = 6;
+  const strikePrice = "2000";
 
   before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
     deployerAddress = deployer.address;
     buyerAddress = buyer.address;
     sellerAddress = seller.address;
-    automatorTreasury = (await ethers.getContractAt(
-      "TaskTreasury",
-      TREASURY_ADDRESS
-    )) as TaskTreasury;
-    automator = (await ethers.getContractAt(
-      "PokeMe",
-      POKEME_ADDRESS
-    )) as PokeMe;
-    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
-    controller = (await ethers.getContractAt(
-      "Controller",
-      CONTROLLER_ADDRESS
-    )) as Controller;
-    marginPool = (await ethers.getContractAt(
-      "MarginPool",
-      MARGIN_POOL_ADDRESS
-    )) as MarginPool;
-    oracle = (await ethers.getContractAt("Oracle", ORACLE_ADDRESS)) as Oracle;
 
+    [, , , oracle, marginPool, , controller] = await setupGammaContracts();
+    [automator, automatorTreasury] = await setupGelatoContracts();
+    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+      deployer,
+      automator.address,
+      automatorTreasury.address
+    );
+    ethPut = (await ethers.getContractAt("Otoken", OTOKEN_ADDRESS)) as Otoken;
+
+    usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
       params: [USDC_WALLET],
     });
 
-    const usdcWalletSigner = await ethers.getSigner(USDC_WALLET);
-    await usdc
-      .connect(usdcWalletSigner)
-      .transfer(
-        sellerAddress,
-        parseUnits(collateralAmount.toString(), usdcDecimals)
-      );
-
-    // deploy Vault Operator
-    const GammaRedeemerFactory = (await ethers.getContractFactory(
-      "GammaRedeemerV1",
-      deployer
-    )) as GammaRedeemerV1__factory;
-    gammaRedeemer = await GammaRedeemerFactory.deploy(
-      ADDRESS_BOOK_ADDRESS,
-      automator.address,
-      automatorTreasury.address
-    );
-    const ResolverFactory = (await ethers.getContractFactory(
-      "GammaRedeemerResolver",
-      deployer
-    )) as GammaRedeemerResolver__factory;
-    resolver = await ResolverFactory.deploy(gammaRedeemer.address);
-
-    ethPut = (await ethers.getContractAt("Otoken", OTOKEN_ADDRESS)) as Otoken;
-
-    const initialAmountUsdc = parseUnits(
-      collateralAmount.toString(),
-      usdcDecimals
+    const usdcAmount = parseUnits(
+      (parseInt(strikePrice) * 2).toString(),
+      USDC_DECIMALS
     ).mul(2);
-    await usdc.connect(seller).approve(marginPool.address, initialAmountUsdc);
+
+    const usdcWalletSigner = await ethers.getSigner(USDC_WALLET);
+    await usdc.connect(usdcWalletSigner).transfer(sellerAddress, usdcAmount);
+
+    await usdc.connect(seller).approve(marginPool.address, usdcAmount);
 
     const vaultId = (
       await controller.getAccountVaultCounter(sellerAddress)
@@ -137,28 +114,22 @@ describe("Mainnet Fork: Auto Redeem", () => {
         sellerAddress,
         vaultId.toString(),
         usdc.address,
-        parseUnits(collateralAmount.toString(), usdcDecimals)
+        usdcAmount
       ),
       getActionMintShort(
         sellerAddress,
         vaultId.toString(),
         ethPut.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits("2", OTOKEN_DECIMALS)
       ),
     ];
     await controller.connect(seller).operate(actions);
     await ethPut
       .connect(seller)
-      .transfer(
-        buyerAddress,
-        parseUnits(optionAmount.toString(), optionDecimals)
-      );
+      .transfer(buyerAddress, parseUnits("2", OTOKEN_DECIMALS));
     await ethPut
       .connect(buyer)
-      .approve(
-        gammaRedeemer.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
-      );
+      .approve(gammaRedeemer.address, parseUnits("2", OTOKEN_DECIMALS));
     await setOperator(seller, controller, gammaRedeemer.address, true);
     await gammaRedeemer.startAutomator(resolver.address);
     await automatorTreasury
@@ -178,51 +149,49 @@ describe("Mainnet Fork: Auto Redeem", () => {
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
-      const owner = await oracle.owner();
-      await hre.network.provider.request({
-        method: "hardhat_impersonateAccount",
-        params: [owner],
-      });
-      const ownerSigner = await ethers.getSigner(owner);
+      await setExpiryPrice(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(strikePrice, STRIKE_PRICE_DECIMALS)
+      );
+      // const owner = await oracle.owner();
+      // await hre.network.provider.request({
+      //   method: "hardhat_impersonateAccount",
+      //   params: [owner],
+      // });
+      // const ownerSigner = await ethers.getSigner(owner);
 
-      await deployer.sendTransaction({
-        to: owner,
-        value: parseEther("1"),
-      });
+      // await deployer.sendTransaction({
+      //   to: owner,
+      //   value: parseEther("1"),
+      // });
 
-      await oracle
-        .connect(ownerSigner)
-        .setAssetPricer("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", owner);
-      await oracle
-        .connect(ownerSigner)
-        .setExpiryPrice(
-          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-          expiry,
-          parseUnits("2000", strikePriceDecimals)
-        );
-      await oracle
-        .connect(ownerSigner)
-        .setStablePrice(
-          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-          parseUnits("1", strikePriceDecimals)
-        );
+      // await oracle
+      //   .connect(ownerSigner)
+      //   .setAssetPricer("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", owner);
+      // await oracle
+      //   .connect(ownerSigner)
+      //   .setExpiryPrice(
+      //     "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      //     expiry,
+      //     parseUnits("2000", strikePriceDecimals)
+      //   );
+      // await oracle
+      //   .connect(ownerSigner)
+      //   .setStablePrice(
+      //     "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      //     parseUnits("1", strikePriceDecimals)
+      //   );
 
       buyerOrderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
-        .createOrder(
-          ethPut.address,
-          parseUnits((optionAmount / 2).toString(), optionDecimals),
-          0
-        );
+        .createOrder(ethPut.address, parseUnits("1", OTOKEN_DECIMALS), 0);
       buyerOrderId2 = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
-        .createOrder(
-          ethPut.address,
-          parseUnits((optionAmount / 2).toString(), optionDecimals),
-          0
-        );
+        .createOrder(ethPut.address, parseUnits("1", OTOKEN_DECIMALS), 0);
 
       sellerOrderId = await gammaRedeemer.getOrdersLength();
       vaultId = await controller.getAccountVaultCounter(sellerAddress);
@@ -231,7 +200,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
     it("should redeem otoken & settle vault", async () => {
       const buyerPayout = await controller.getPayout(
         ethPut.address,
-        parseUnits(optionAmount.toString(), optionDecimals)
+        parseUnits("2", OTOKEN_DECIMALS)
       );
       const sellerProceed = await controller.getProceed(sellerAddress, vaultId);
 
