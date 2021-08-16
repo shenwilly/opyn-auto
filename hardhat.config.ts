@@ -50,10 +50,10 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
-      // forking: {
-      //   url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
-      //   blockNumber: 12984971,
-      // },
+      forking: {
+        url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
+        blockNumber: 12984971,
+      },
     },
     localhost: {
       allowUnlimitedContractSize: true
