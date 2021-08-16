@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { POKEME_ADDRESS, TREASURY_ADDRESS } from "../../../constants/constants";
+import { POKEME_ADDRESS, TREASURY_ADDRESS } from "../../../constants/address";
 import { PokeMe, TaskTreasury } from "../../../typechain";
 
 type GelatoContracts = [PokeMe, TaskTreasury];

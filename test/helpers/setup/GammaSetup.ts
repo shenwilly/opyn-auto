@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import {
   ADDRESS_BOOK_ADDRESS,
   ORACLE_ADDRESS,
-} from "../../../constants/constants";
+} from "../../../constants/address";
 import {
   AddressBook,
   Whitelist,
