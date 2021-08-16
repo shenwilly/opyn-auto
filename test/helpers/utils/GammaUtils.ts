@@ -169,7 +169,7 @@ export const getOrCreateOtoken = async (
   strikePrice: BigNumberish,
   expiry: BigNumberish,
   isPut: boolean
-) => {
+): Promise<Otoken> => {
   let otoken = await factory.getOtoken(
     underlying,
     strike,
@@ -198,5 +198,5 @@ export const getOrCreateOtoken = async (
     );
   }
 
-  return otoken;
+  return (await ethers.getContractAt("Otoken", otoken)) as Otoken;
 };
