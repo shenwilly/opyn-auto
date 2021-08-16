@@ -1,3 +1,5 @@
+import { constants } from "ethers/lib/ethers";
+
 // Gelato
 export const POKEME_ADDRESS = "0x89a26d08c26E00cE935a775Ba74A984Ad346679b";
 export const TREASURY_ADDRESS = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
@@ -17,3 +19,5 @@ export const ETH_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 // Large token holders
 export const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
+
+export const ZERO_ADDR = constants.AddressZero;
