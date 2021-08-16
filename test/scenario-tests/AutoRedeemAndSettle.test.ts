@@ -38,16 +38,15 @@ import { setExpiryPrice } from "../helpers/utils/GammaUtils";
 const { expect } = chai;
 const ZERO_ADDR = constants.AddressZero;
 
-const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
-
 // oWETHUSDC/USDC-20AUG21-2300P
+const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
 const USDC_WALLET = "0xae2d4617c862309a3d75a0ffb358c7a5009c673f";
 
 describe("Mainnet Fork: Auto Redeem", () => {
   let deployer: SignerWithAddress;
+
   let buyer: SignerWithAddress;
   let seller: SignerWithAddress;
-  let deployerAddress: string;
   let buyerAddress: string;
   let sellerAddress: string;
 
@@ -68,7 +67,6 @@ describe("Mainnet Fork: Auto Redeem", () => {
 
   before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
-    deployerAddress = deployer.address;
     buyerAddress = buyer.address;
     sellerAddress = seller.address;
 
@@ -115,6 +113,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
       ),
     ];
     await controller.connect(seller).operate(actions);
+
     await ethPut
       .connect(seller)
       .transfer(buyerAddress, parseUnits("2", OTOKEN_DECIMALS));
@@ -135,6 +134,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
     let buyerOrderId2: BigNumber;
     let sellerOrderId: BigNumber;
     let vaultId: BigNumber;
+
     before(async () => {
       expiry = (await ethPut.expiryTimestamp()).toNumber();
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
@@ -160,6 +160,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
       vaultId = await controller.getAccountVaultCounter(sellerAddress);
       await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
     });
+
     it("should redeem otoken & settle vault", async () => {
       const buyerPayout = await controller.getPayout(
         ethPut.address,
