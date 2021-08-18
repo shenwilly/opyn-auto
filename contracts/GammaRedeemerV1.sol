@@ -3,6 +3,7 @@ pragma solidity 0.8.0;
 
 import {GammaOperator} from "./GammaOperator.sol";
 import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
+import {IUniswapRouter} from "./interfaces/IUniswapRouter.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
 import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
 import {IResolver} from "./interfaces/IResolver.sol";
@@ -13,6 +14,7 @@ import {IResolver} from "./interfaces/IResolver.sol";
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     Order[] public orders;
 
+    IUniswapRouter public uniRouter;
     IPokeMe public automator;
     ITaskTreasury public automatorTreasury;
     bool public isAutomatorEnabled;
@@ -34,9 +36,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     constructor(
         address _gammaAddressBook,
+        address _uniRouter,
         address _automator,
         address _automatorTreasury
     ) GammaOperator(_gammaAddressBook) {
+        uniRouter = IUniswapRouter(_uniRouter);
         automator = IPokeMe(_automator);
         automatorTreasury = ITaskTreasury(_automatorTreasury);
         isAutomatorEnabled = false;
@@ -187,6 +191,21 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
     }
 
+    function swap(
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        address[] calldata path
+    ) internal returns (uint256[] memory amounts) {
+        return
+            IUniswapRouter(uniRouter).swapExactTokensForTokens(
+                _amountIn,
+                _amountOutMin,
+                path,
+                address(this),
+                block.timestamp
+            );
+    }
+
     /**
      * @notice withdraw funds from automator
      * @param _token address of token to withdraw
@@ -194,6 +213,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      */
     function withdrawFund(address _token, uint256 _amount) public onlyOwner {
         automatorTreasury.withdrawFunds(payable(this), _token, _amount);
+    }
+
+    function setUniRouter(address _uniRouter) public onlyOwner {
+        uniRouter = IUniswapRouter(_uniRouter);
     }
 
     function setAutomator(address _automator) public onlyOwner {
