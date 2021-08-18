@@ -164,7 +164,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @dev only automator allowed
      * @param _orderId the id of specific order to process
      */
-    function processOrder(uint256 _orderId) public override onlyAuthorized {
+    function processOrder(uint256 _orderId, ProcessOrderArgs calldata orderArgs)
+        public
+        override
+        onlyAuthorized
+    {
         Order storage order = orders[_orderId];
         require(
             shouldProcessOrder(_orderId),
@@ -185,9 +189,16 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @notice process multiple orders
      * @param _orderIds array of order ids to process
      */
-    function processOrders(uint256[] calldata _orderIds) public override {
+    function processOrders(
+        uint256[] calldata _orderIds,
+        ProcessOrderArgs[] calldata _orderArgs
+    ) public override {
+        require(
+            _orderIds.length == _orderArgs.length,
+            "GammaRedeemer::processOrders: Params lengths must be same"
+        );
         for (uint256 i = 0; i < _orderIds.length; i++) {
-            processOrder(_orderIds[i]);
+            processOrder(_orderIds[i], _orderArgs[i]);
         }
     }
 

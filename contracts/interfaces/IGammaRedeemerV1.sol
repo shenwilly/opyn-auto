@@ -13,12 +13,21 @@ interface IGammaRedeemerV1 {
         uint256 vaultId;
         // true if settle vault order, else redeem otoken
         bool isSeller;
-        // convert proceed to ETH, currently unused
-        bool toETH;
+        // convert proceed to token if not address(0)
+        address toToken;
         // fee in 1/10.000
         uint256 fee;
         // true if order is already processed
         bool finished;
+    }
+
+    struct ProcessOrderArgs {
+        // minimal swap output amount to prevent manipulation
+        uint256 swapAmountOutMin;
+        // swap path
+        address[] swapPath;
+        // send proceed to owner if address(0), else to
+        address to;
     }
 
     event OrderCreated(
@@ -38,9 +47,13 @@ interface IGammaRedeemerV1 {
 
     function shouldProcessOrder(uint256 _orderId) external view returns (bool);
 
-    function processOrder(uint256 _orderId) external;
+    function processOrder(uint256 _orderId, ProcessOrderArgs calldata _orderArg)
+        external;
 
-    function processOrders(uint256[] calldata _orderIds) external;
+    function processOrders(
+        uint256[] calldata _orderIds,
+        ProcessOrderArgs[] calldata _orderArgs
+    ) external;
 
     function getOrdersLength() external view returns (uint256);
 
