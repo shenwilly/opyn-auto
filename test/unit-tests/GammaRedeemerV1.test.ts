@@ -406,7 +406,6 @@ describe("GammaRedeemer", () => {
         gammaRedeemer.processOrder(orderId, {
           swapAmountOutMin: 0,
           swapPath: [],
-          to: ZERO_ADDR,
         }),
         "GammaRedeemer::processOrder: Order should not be processed"
       );
@@ -427,7 +426,6 @@ describe("GammaRedeemer", () => {
         gammaRedeemer.processOrder(orderId, {
           swapAmountOutMin: 0,
           swapPath: [],
-          to: ZERO_ADDR,
         })
       ).to.be.reverted;
     });
@@ -443,7 +441,6 @@ describe("GammaRedeemer", () => {
       await gammaRedeemer.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
-        to: ZERO_ADDR,
       });
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
@@ -460,7 +457,6 @@ describe("GammaRedeemer", () => {
       await gammaRedeemer.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
-        to: ZERO_ADDR,
       });
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);

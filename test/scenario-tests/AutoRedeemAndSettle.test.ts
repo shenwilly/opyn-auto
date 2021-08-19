@@ -203,12 +203,10 @@ describe("Mainnet Fork: Auto Redeem", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
           ],
         ]
@@ -242,7 +240,6 @@ describe("Mainnet Fork: Auto Redeem", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
           ],
         ]

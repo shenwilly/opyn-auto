@@ -497,7 +497,6 @@ describe("Gamma Redeemer Resolver", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
           ],
         ]
@@ -507,7 +506,6 @@ describe("Gamma Redeemer Resolver", () => {
       await gammaRedeemer.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
-        to: ZERO_ADDR,
       });
 
       const [canExecAfter, execPayloadAfter] =
@@ -566,7 +564,6 @@ describe("Gamma Redeemer Resolver", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
           ],
         ]
@@ -618,12 +615,10 @@ describe("Gamma Redeemer Resolver", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
             {
               swapAmountOutMin: 0,
               swapPath: [],
-              to: ZERO_ADDR,
             },
           ],
         ]
