@@ -53,7 +53,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     function startAutomator(address _resolver) public onlyOwner {
-        require(!isAutomatorEnabled);
+        require(
+            !isAutomatorEnabled,
+            "GammaRedeemer::stopAutomator: already started"
+        );
         isAutomatorEnabled = true;
         automator.createTask(
             address(this),
@@ -64,7 +67,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     }
 
     function stopAutomator() public onlyOwner {
-        require(isAutomatorEnabled);
+        require(
+            isAutomatorEnabled,
+            "GammaRedeemer::stopAutomator: already stopped"
+        );
         isAutomatorEnabled = false;
         automator.cancelTask(
             automator.getTaskId(
