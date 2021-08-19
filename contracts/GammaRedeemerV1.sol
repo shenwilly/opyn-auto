@@ -26,8 +26,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     mapping(address => mapping(address => bool)) public uniPair;
 
     // fee in 1/10.000: 1% = 100, 0.01% = 1
-    uint256 public redeemFee = 50;
-    uint256 public settleFee = 10;
+    uint256 public redeemFee = 100;
+    uint256 public settleFee = 15;
 
     /**
      * @notice only automator or owner
