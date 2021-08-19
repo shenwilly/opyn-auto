@@ -1,6 +1,9 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { ethers } from "hardhat";
-import { ADDRESS_BOOK_ADDRESS } from "../../../constants/address";
+import {
+  ADDRESS_BOOK_ADDRESS,
+  UNISWAP_V2_ROUTER_02,
+} from "../../../constants/address";
 import {
   GammaRedeemerResolver,
   GammaRedeemerResolver__factory,
@@ -31,7 +34,10 @@ export const setupAutoGammaContracts = async (
     "GammaRedeemerResolver",
     signer
   )) as GammaRedeemerResolver__factory;
-  const resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+  const resolver = await ResolverFactory.deploy(
+    gammaRedeemer.address,
+    UNISWAP_V2_ROUTER_02
+  );
 
   return [gammaRedeemer, resolver];
 };

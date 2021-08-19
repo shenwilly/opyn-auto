@@ -5,15 +5,18 @@ import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
 import {IGammaOperator} from "./interfaces/IGammaOperator.sol";
 import {IResolver} from "./interfaces/IResolver.sol";
 import {MarginVault} from "./external/OpynVault.sol";
+import {IUniswapRouter} from "./interfaces/IUniswapRouter.sol";
 
 /// @author Willy Shen
 /// @title GammaRedeemer Resolver
 /// @notice A GammaRedeemer resolver for Gelato PokeMe checks
 contract GammaRedeemerResolver is IResolver {
     address public redeemer;
+    address public uniRouter;
 
-    constructor(address _redeemer) {
+    constructor(address _redeemer, address _uniRouter) {
         redeemer = _redeemer;
+        uniRouter = _uniRouter;
     }
 
     /**
@@ -68,6 +71,50 @@ contract GammaRedeemerResolver is IResolver {
         return true;
     }
 
+    function getOrderPayout(uint256 _orderId)
+        public
+        view
+        returns (address payoutToken, uint256 payoutAmount)
+    {
+        IGammaRedeemerV1.Order memory order = IGammaRedeemerV1(redeemer)
+            .getOrder(_orderId);
+
+        if (order.isSeller) {
+            (
+                MarginVault.Vault memory vault,
+                uint256 typeVault,
+
+            ) = IGammaOperator(redeemer).getVaultWithDetails(
+                order.owner,
+                order.vaultId
+            );
+
+            address otoken = IGammaOperator(redeemer).getVaultOtokenByVault(
+                vault
+            );
+            payoutToken = IGammaOperator(redeemer).getOtokenCollateral(otoken);
+
+            (payoutAmount, ) = IGammaOperator(redeemer).getExcessCollateral(
+                vault,
+                typeVault
+            );
+        } else {
+            payoutToken = IGammaOperator(redeemer).getOtokenCollateral(
+                order.otoken
+            );
+
+            uint256 actualAmount = IGammaOperator(redeemer).getRedeemableAmount(
+                order.owner,
+                order.otoken,
+                order.amount
+            );
+            payoutAmount = IGammaOperator(redeemer).getRedeemPayout(
+                order.otoken,
+                actualAmount
+            );
+        }
+    }
+
     /**
      * @notice return list of processable orderIds
      * @return canExec if gelato should execute
@@ -109,7 +156,6 @@ contract GammaRedeemerResolver is IResolver {
         uint256 counter;
         uint256[] memory orderIds = new uint256[](orderIdsLength);
 
-        // TODO: get orderArgs
 
             IGammaRedeemerV1.ProcessOrderArgs[] memory orderArgs
          = new IGammaRedeemerV1.ProcessOrderArgs[](orderIdsLength);
@@ -121,6 +167,25 @@ contract GammaRedeemerResolver is IResolver {
             ) {
                 postCheckHashes[i] = getOrderHash(orders[i]);
                 orderIds[counter] = i;
+
+                if (orders[i].toToken != address(0)) {
+                    // determine amountOutMin for swap
+                    (
+                        address payoutToken,
+                        uint256 payoutAmount
+                    ) = getOrderPayout(i);
+                    payoutAmount =
+                        payoutAmount -
+                        ((orders[i].fee * payoutAmount) / 10000);
+                    address[] memory path = new address[](2);
+                    path[0] = payoutToken;
+                    path[1] = orders[i].toToken;
+                    uint256[] memory amounts = IUniswapRouter(uniRouter)
+                        .getAmountsOut(payoutAmount, path);
+                    orderArgs[counter].swapAmountOutMin = amounts[1];
+                    orderArgs[counter].swapPath = path;
+                }
+
                 counter++;
             }
         }

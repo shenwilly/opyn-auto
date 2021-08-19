@@ -38,6 +38,17 @@ interface IGammaOperator {
         pure
         returns (address);
 
+    function getRedeemPayout(address _otoken, uint256 _amount)
+        external
+        view
+        returns (uint256);
+
+    function getRedeemableAmount(
+        address _owner,
+        address _otoken,
+        uint256 _amount
+    ) external view returns (uint256);
+
     function isSettlementAllowed(address _otoken) external view returns (bool);
 
     function isOperatorOf(address _owner) external view returns (bool);
