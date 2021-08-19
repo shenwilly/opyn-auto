@@ -80,7 +80,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function createOrder(
         address _otoken,
         uint256 _amount,
-        uint256 _vaultId
+        uint256 _vaultId,
+        address _toToken
     ) public override {
         uint256 fee;
         bool isSeller;
@@ -99,9 +100,16 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             fee = redeemFee;
         }
 
-        // if (order.toToken != address(0)) {
-        // check payout token and if pair is allowed
-        // }
+        if (_toToken != address(0)) {
+            address payoutToken;
+            if (isSeller) {
+                address otoken = getVaultOtoken(msg.sender, _vaultId);
+                payoutToken = getOtokenCollateral(otoken);
+            } else {
+                payoutToken = getOtokenCollateral(_otoken);
+            }
+            require(uniPair[payoutToken][_toToken], "GammaRedeemer::createOrder: settlement token not allowed");
+        }
 
         uint256 orderId = orders.length;
 
@@ -112,6 +120,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         order.vaultId = _vaultId;
         order.isSeller = isSeller;
         order.fee = fee;
+        order.toToken = _toToken;
         orders.push(order);
 
         emit OrderCreated(orderId, msg.sender, _otoken);

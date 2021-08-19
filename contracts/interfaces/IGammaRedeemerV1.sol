@@ -40,7 +40,8 @@ interface IGammaRedeemerV1 {
     function createOrder(
         address _otoken,
         uint256 _amount,
-        uint256 _vaultId
+        uint256 _vaultId,
+        address _toToken
     ) external;
 
     function cancelOrder(uint256 _orderId) external;
