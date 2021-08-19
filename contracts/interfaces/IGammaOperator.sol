@@ -14,7 +14,7 @@ interface IGammaOperator {
         uint256 _typeVault
     ) external view returns (uint256, bool);
 
-    function getVaultOtoken(MarginVault.Vault memory _vault)
+    function getVaultOtokenByVault(MarginVault.Vault memory _vault)
         external
         pure
         returns (address);

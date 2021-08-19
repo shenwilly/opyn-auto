@@ -85,7 +85,7 @@ contract GammaOperator is Ownable {
         actions[0] = action;
 
         MarginVault.Vault memory vault = getVault(_owner, _vaultId);
-        address otoken = getVaultOtoken(vault);
+        address otoken = getVaultOtokenByVault(vault);
         payoutToken = IOtoken(otoken).collateralAsset();
 
         uint256 startAmount = IERC20(payoutToken).balanceOf(address(this));
@@ -253,7 +253,7 @@ contract GammaOperator is Ownable {
      * @param _vault vault struct
      * @return otoken address
      */
-    function getVaultOtoken(MarginVault.Vault memory _vault)
+    function getVaultOtokenByVault(MarginVault.Vault memory _vault)
         public
         pure
         returns (address)
@@ -272,7 +272,7 @@ contract GammaOperator is Ownable {
         returns (address)
     {
         MarginVault.Vault memory vault = getVault(_owner, _vaultId);
-        return getVaultOtoken(vault);
+        return getVaultOtokenByVault(vault);
     }
 
     function getOtokenCollateral(address _otoken)

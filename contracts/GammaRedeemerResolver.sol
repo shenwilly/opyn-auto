@@ -42,7 +42,7 @@ contract GammaRedeemerResolver is IResolver {
                 order.vaultId
             );
 
-            try IGammaOperator(redeemer).getVaultOtoken(vault) returns (
+            try IGammaOperator(redeemer).getVaultOtokenByVault(vault) returns (
                 address otoken
             ) {
                 if (
