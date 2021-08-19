@@ -13,7 +13,8 @@ type AutoGammaContracts = [GammaRedeemerV1, GammaRedeemerResolver];
 export const setupAutoGammaContracts = async (
   signer: SignerWithAddress,
   automator: string,
-  treasury: string
+  treasury: string,
+  uniRouter: string
 ): Promise<AutoGammaContracts> => {
   const GammaRedeemerFactory = (await ethers.getContractFactory(
     "GammaRedeemerV1",
@@ -22,7 +23,8 @@ export const setupAutoGammaContracts = async (
   const gammaRedeemer = await GammaRedeemerFactory.deploy(
     ADDRESS_BOOK_ADDRESS,
     automator,
-    treasury
+    treasury,
+    uniRouter
   );
 
   const ResolverFactory = (await ethers.getContractFactory(

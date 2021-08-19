@@ -22,6 +22,7 @@ import { constants, Contract } from "ethers";
 import { createValidExpiry } from "../helpers/utils/time";
 import {
   ETH_TOKEN_ADDRESS,
+  UNISWAP_V2_ROUTER_02,
   USDC_ADDRESS,
   WETH_ADDRESS,
 } from "../../constants/address";
@@ -101,6 +102,7 @@ describe("GammaRedeemer", () => {
     [automator, automatorTreasury] = await setupGelatoContracts();
     [gammaRedeemer, resolver] = await setupAutoGammaContracts(
       deployer,
+      UNISWAP_V2_ROUTER_02,
       automator.address,
       automatorTreasury.address
     );
@@ -194,7 +196,8 @@ describe("GammaRedeemer", () => {
           .createOrder(
             buyerAddress,
             parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-            0
+            0,
+            ZERO_ADDR
           ),
         "GammaRedeemer::createOrder: Otoken not whitelisted"
       );
@@ -206,7 +209,8 @@ describe("GammaRedeemer", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
@@ -220,7 +224,7 @@ describe("GammaRedeemer", () => {
         orderAmount,
         orderVaultId,
         orderIsSeller,
-        orderToEth,
+        orderToToken,
         orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
@@ -231,7 +235,7 @@ describe("GammaRedeemer", () => {
       );
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
-      expect(orderToEth).to.be.eq(false);
+      expect(orderToToken).to.be.eq(ZERO_ADDR);
       expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
@@ -239,7 +243,7 @@ describe("GammaRedeemer", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 1);
+        .createOrder(ZERO_ADDR, 0, 1, ZERO_ADDR);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderCreated"
@@ -252,7 +256,7 @@ describe("GammaRedeemer", () => {
         orderAmount,
         orderVaultId,
         orderIsSeller,
-        orderToEth,
+        orderToToken,
         orderFee,
         orderFinished,
       ] = await gammaRedeemer.orders(orderId);
@@ -261,7 +265,7 @@ describe("GammaRedeemer", () => {
       expect(orderAmount).to.be.eq(0);
       expect(orderVaultId).to.be.eq(1);
       expect(orderIsSeller).to.be.eq(true);
-      expect(orderToEth).to.be.eq(false);
+      expect(orderToToken).to.be.eq(ZERO_ADDR);
       expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
@@ -272,12 +276,16 @@ describe("GammaRedeemer", () => {
 
     beforeEach(async () => {
       orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
     });
 
     it("should revert if sender is not owner", async () => {
       orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
 
       await expectRevert(
         gammaRedeemer.connect(buyer).cancelOrder(orderId),
@@ -294,7 +302,9 @@ describe("GammaRedeemer", () => {
     });
     it("should cancel order", async () => {
       const newOrderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, 10);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
 
       const tx = await gammaRedeemer.connect(seller).cancelOrder(newOrderId);
       const receipt = await tx.wait();
@@ -322,7 +332,9 @@ describe("GammaRedeemer", () => {
 
     it("should return false if isSeller is false and shouldRedeemOtoken is false", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
       await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
       expect(
@@ -342,7 +354,7 @@ describe("GammaRedeemer", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(seller)
-        .createOrder(ethPut.address, 0, vaultId);
+        .createOrder(ethPut.address, 0, vaultId, ZERO_ADDR);
 
       expect(
         await gammaRedeemer.shouldSettleVault(sellerAddress, vaultId)
@@ -351,7 +363,9 @@ describe("GammaRedeemer", () => {
     });
     it("should return true for buyer", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
       await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
@@ -360,7 +374,9 @@ describe("GammaRedeemer", () => {
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
 
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
       expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
     });
@@ -381,11 +397,17 @@ describe("GammaRedeemer", () => {
 
     it("should revert if order is already finished", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ethPut.address, 0, 1);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ethPut.address, 0, 1, ZERO_ADDR);
       await gammaRedeemer.connect(seller).cancelOrder(orderId);
 
       await expectRevert(
-        gammaRedeemer.processOrder(orderId),
+        gammaRedeemer.processOrder(orderId, {
+          swapAmountOutMin: 0,
+          swapPath: [],
+          to: ZERO_ADDR,
+        }),
         "GammaRedeemer::processOrder: Order should not be processed"
       );
     });
@@ -396,31 +418,50 @@ describe("GammaRedeemer", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
-      await expect(gammaRedeemer.processOrder(orderId)).to.be.reverted;
+      await expect(
+        gammaRedeemer.processOrder(orderId, {
+          swapAmountOutMin: 0,
+          swapPath: [],
+          to: ZERO_ADDR,
+        })
+      ).to.be.reverted;
     });
     it("should redeemOtoken if isSeller is false", async () => {
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(buyer).createOrder(ethPut.address, amount, 0);
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
       await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
       const balanceBefore = await usdc.balanceOf(buyerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId);
+      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+        swapAmountOutMin: 0,
+        swapPath: [],
+        to: ZERO_ADDR,
+      });
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
       await setOperator(seller, controller, gammaRedeemer.address, true);
 
       const balanceBefore = await usdc.balanceOf(sellerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId);
+      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+        swapAmountOutMin: 0,
+        swapPath: [],
+        to: ZERO_ADDR,
+      });
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
