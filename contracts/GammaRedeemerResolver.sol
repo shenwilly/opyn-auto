@@ -108,6 +108,9 @@ contract GammaRedeemerResolver is IResolver {
 
         uint256 counter;
         uint256[] memory orderIds = new uint256[](orderIdsLength);
+
+            IGammaRedeemerV1.ProcessOrderArgs[] memory orderArgs
+         = new IGammaRedeemerV1.ProcessOrderArgs[](orderIdsLength);
         for (uint256 i = 0; i < orders.length; i++) {
             if (
                 IGammaRedeemerV1(redeemer).shouldProcessOrder(i) &&
@@ -122,7 +125,8 @@ contract GammaRedeemerResolver is IResolver {
 
         execPayload = abi.encodeWithSelector(
             IGammaRedeemerV1.processOrders.selector,
-            orderIds
+            orderIds,
+            orderArgs
         );
     }
 

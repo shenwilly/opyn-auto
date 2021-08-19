@@ -60,7 +60,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         isAutomatorEnabled = true;
         automator.createTask(
             address(this),
-            bytes4(keccak256("processOrders(uint256[])")),
+            bytes4(0x1453a8a9), //processOrders
             _resolver,
             abi.encodeWithSelector(IResolver.getProcessableOrders.selector)
         );
@@ -76,7 +76,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             automator.getTaskId(
                 address(this),
                 address(this),
-                bytes4(keccak256("processOrders(uint256[])"))
+                bytes4(0x1453a8a9) //processOrders
             )
         );
     }
