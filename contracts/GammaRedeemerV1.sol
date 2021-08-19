@@ -19,6 +19,8 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     ITaskTreasury public automatorTreasury;
     bool public isAutomatorEnabled;
 
+    mapping(address => mapping(address => bool)) public uniPair;
+
     // fee in 1/10.000: 1% = 100, 0.01% = 1
     uint256 public redeemFee = 50;
     uint256 public settleFee = 10;
@@ -96,6 +98,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             );
             fee = redeemFee;
         }
+
+        // if (order.toToken != address(0)) {
+        // check payout token and if pair is allowed
+        // }
 
         uint256 orderId = orders.length;
 
@@ -182,6 +188,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             redeemOtoken(order.owner, order.otoken, order.amount, order.fee);
         }
 
+        // if (order.toToken != address(0)) {
+        // swap(amountIn, orderArgs.swapAmountOutMin, orderArgs.swapPath)
+        // safeTransferFrom(orderArgs.to)
+        // }
+
         emit OrderFinished(_orderId, false);
     }
 
@@ -244,6 +255,24 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     function setSettleFee(uint256 _settleFee) public onlyOwner {
         settleFee = _settleFee;
+    }
+
+    function allowPair(address _token0, address _token1) public onlyOwner {
+        require(
+            !uniPair[_token0][_token1],
+            "GammaRedeemer::allowPair: already allowed"
+        );
+        uniPair[_token0][_token1] = true;
+        uniPair[_token1][_token0] = true;
+    }
+
+    function disallowPair(address _token0, address _token1) public onlyOwner {
+        require(
+            uniPair[_token0][_token1],
+            "GammaRedeemer::allowPair: already disallowed"
+        );
+        uniPair[_token0][_token1] = false;
+        uniPair[_token1][_token0] = false;
     }
 
     function getOrdersLength() public view override returns (uint256) {
