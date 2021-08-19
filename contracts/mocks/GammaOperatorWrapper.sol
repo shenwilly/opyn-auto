@@ -13,28 +13,21 @@ contract GammaOperatorWrapper is GammaOperator {
     function redeem(
         address _owner,
         address _otoken,
-        uint256 _amount,
-        uint256 _fee
+        uint256 _amount
     ) public {
         (address payoutToken, uint256 payoutAmount) = redeemOtoken(
             _owner,
             _otoken,
             _amount
         );
-        payoutAmount = payoutAmount - ((_fee * payoutAmount) / 10000);
         IERC20(payoutToken).safeTransfer(_owner, payoutAmount);
     }
 
-    function settle(
-        address _owner,
-        uint256 _vaultId,
-        uint256 _fee
-    ) public {
+    function settle(address _owner, uint256 _vaultId) public {
         (address payoutToken, uint256 payoutAmount) = settleVault(
             _owner,
             _vaultId
         );
-        payoutAmount = payoutAmount - ((_fee * payoutAmount) / 10000);
         IERC20(payoutToken).safeTransfer(_owner, payoutAmount);
     }
 }
