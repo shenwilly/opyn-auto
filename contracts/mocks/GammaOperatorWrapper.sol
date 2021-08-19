@@ -2,8 +2,12 @@
 pragma solidity 0.8.0;
 
 import {GammaOperator} from "../GammaOperator.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract GammaOperatorWrapper is GammaOperator {
+    using SafeERC20 for IERC20;
+
     constructor(address _gammaAddressBook) GammaOperator(_gammaAddressBook) {}
 
     function redeem(
@@ -12,7 +16,13 @@ contract GammaOperatorWrapper is GammaOperator {
         uint256 _amount,
         uint256 _fee
     ) public {
-        redeemOtoken(_owner, _otoken, _amount, _fee);
+        (address payoutToken, uint256 payoutAmount) = redeemOtoken(
+            _owner,
+            _otoken,
+            _amount
+        );
+        payoutAmount = payoutAmount - ((_fee * payoutAmount) / 10000);
+        IERC20(payoutToken).safeTransfer(_owner, payoutAmount);
     }
 
     function settle(
@@ -20,6 +30,11 @@ contract GammaOperatorWrapper is GammaOperator {
         uint256 _vaultId,
         uint256 _fee
     ) public {
-        settleVault(_owner, _vaultId, _fee);
+        (address payoutToken, uint256 payoutAmount) = settleVault(
+            _owner,
+            _vaultId
+        );
+        payoutAmount = payoutAmount - ((_fee * payoutAmount) / 10000);
+        IERC20(payoutToken).safeTransfer(_owner, payoutAmount);
     }
 }

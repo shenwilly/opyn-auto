@@ -7,11 +7,15 @@ import {IUniswapRouter} from "./interfaces/IUniswapRouter.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
 import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
 import {IResolver} from "./interfaces/IResolver.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @author Willy Shen
 /// @title Gamma Automatic Redeemer
 /// @notice An automatic redeemer for Gamma otoken holders and writers
 contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
+    using SafeERC20 for IERC20;
+
     Order[] public orders;
 
     IUniswapRouter public uniRouter;
@@ -108,7 +112,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             } else {
                 payoutToken = getOtokenCollateral(_otoken);
             }
-            require(uniPair[payoutToken][_toToken], "GammaRedeemer::createOrder: settlement token not allowed");
+            require(
+                uniPair[payoutToken][_toToken],
+                "GammaRedeemer::createOrder: settlement token not allowed"
+            );
         }
 
         uint256 orderId = orders.length;
@@ -191,16 +198,40 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         );
         order.finished = true;
 
+        address payoutToken;
+        uint256 payoutAmount;
         if (order.isSeller) {
-            settleVault(order.owner, order.vaultId, order.fee);
+            (payoutToken, payoutAmount) = settleVault(
+                order.owner,
+                order.vaultId
+            );
         } else {
-            redeemOtoken(order.owner, order.otoken, order.amount, order.fee);
+            (payoutToken, payoutAmount) = redeemOtoken(
+                order.owner,
+                order.otoken,
+                order.amount
+            );
         }
 
-        // if (order.toToken != address(0)) {
-        // swap(amountIn, orderArgs.swapAmountOutMin, orderArgs.swapPath)
-        // safeTransferFrom(orderArgs.to)
-        // }
+        // minus fee
+        payoutAmount = payoutAmount - ((order.fee * payoutAmount) / 10000);
+
+        if (order.toToken == address(0)) {
+            IERC20(payoutToken).safeTransfer(order.owner, payoutAmount);
+        } else {
+            require(
+                payoutToken == orderArgs.swapPath[0] &&
+                    order.toToken == orderArgs.swapPath[1],
+                "GammaRedeemer::processOrder: Invalid swap path"
+            );
+            IERC20(payoutToken).approve(address(uniRouter), payoutAmount);
+            uint256[] memory amounts = swap(
+                payoutAmount,
+                orderArgs.swapAmountOutMin,
+                orderArgs.swapPath
+            );
+            IERC20(order.toToken).safeTransfer(order.owner, amounts[1]);
+        }
 
         emit OrderFinished(_orderId, false);
     }
