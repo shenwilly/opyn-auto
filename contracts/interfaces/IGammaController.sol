@@ -27,6 +27,8 @@ interface IGammaController {
             uint256,
             uint256
         );
+    
+    function getVault(address _owner, uint256 _vaultId) external view returns (MarginVault.Vault memory);
 
     function getAccountVaultCounter(address _accountOwner)
         external

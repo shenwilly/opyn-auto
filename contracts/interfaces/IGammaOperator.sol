@@ -18,6 +18,11 @@ interface IGammaOperator {
         external
         pure
         returns (address);
+    
+    function getVaultOtoken(address _owner, uint256 _vaultId)
+        external
+        view
+        returns (address);
 
     function getVaultWithDetails(address _owner, uint256 _vaultId)
         external
@@ -27,6 +32,11 @@ interface IGammaOperator {
             uint256,
             uint256
         );
+    
+    function getOtokenCollateral(address _otoken)
+        external
+        pure
+        returns (address);
 
     function isSettlementAllowed(address _otoken) external view returns (bool);
 

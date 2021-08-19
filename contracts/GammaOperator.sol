@@ -89,14 +89,10 @@ contract GammaOperator is Ownable {
 
         Actions.ActionArgs[] memory actions = new Actions.ActionArgs[](1);
         actions[0] = action;
-        (MarginVault.Vault memory vault, , ) = getVaultWithDetails(
-            _owner,
-            _vaultId
-        );
-        address otoken = getVaultOtoken(vault);
 
-        IERC20 collateral = IERC20(IOtoken(otoken).collateralAsset());
-        uint256 startAmount = collateral.balanceOf(address(this));
+        MarginVault.Vault memory vault = getVault(_owner, _vaultId);
+        address otoken = getVaultOtoken(vault);
+        payoutToken = IOtoken(otoken).collateralAsset();
 
         controller.operate(actions);
 
@@ -145,7 +141,6 @@ contract GammaOperator is Ownable {
         (
             MarginVault.Vault memory vault,
             uint256 typeVault,
-
         ) = getVaultWithDetails(_owner, _vaultId);
 
         (uint256 payout, bool isValidVault) = getExcessCollateral(
@@ -250,6 +245,14 @@ contract GammaOperator is Ownable {
     {
         return controller.getVaultWithDetails(_owner, _vaultId);
     }
+    
+    function getVault(address _owner, uint256 _vaultId)
+        public
+        view
+        returns (MarginVault.Vault memory)
+    {
+        return controller.getVault(_owner, _vaultId);
+    }
 
     /**
      * @notice return the otoken from specific vault
@@ -267,6 +270,23 @@ contract GammaOperator is Ownable {
         assert(hasShort || hasLong);
 
         return hasShort ? _vault.shortOtokens[0] : _vault.longOtokens[0];
+    }
+
+    function getVaultOtoken(address _owner, uint256 _vaultId)
+        public
+        view
+        returns (address)
+    {
+        MarginVault.Vault memory vault = getVault(_owner, _vaultId);
+        return getVaultOtoken(vault);
+    }
+
+    function getOtokenCollateral(address _otoken)
+        public
+        view
+        returns (address)
+    {
+        return IOtoken(_otoken).collateralAsset();
     }
 
     /**
