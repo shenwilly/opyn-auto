@@ -19,7 +19,12 @@ import { parseUnits } from "ethers/lib/utils";
 import { setupGammaContracts } from "../helpers/setup/GammaSetup";
 import { BigNumber, Contract } from "ethers/lib/ethers";
 import { createValidExpiry } from "../helpers/utils/time";
-import { USDC_ADDRESS, WETH_ADDRESS, ZERO_ADDR } from "../../constants/address";
+import {
+  UNISWAP_V2_ROUTER_02,
+  USDC_ADDRESS,
+  WETH_ADDRESS,
+  ZERO_ADDR,
+} from "../../constants/address";
 import { mintUsdc } from "../helpers/utils/token";
 import {
   getActionDepositCollateral,
@@ -90,6 +95,7 @@ describe("Gamma Redeemer Resolver", () => {
     [automator, automatorTreasury] = await setupGelatoContracts();
     [gammaRedeemer, resolver] = await setupAutoGammaContracts(
       deployer,
+      UNISWAP_V2_ROUTER_02,
       automator.address,
       automatorTreasury.address
     );
@@ -185,7 +191,8 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       expect(
@@ -202,7 +209,7 @@ describe("Gamma Redeemer Resolver", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, vaultCounter.add(1));
+        .createOrder(ZERO_ADDR, 0, vaultCounter.add(1), ZERO_ADDR);
 
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
@@ -215,7 +222,7 @@ describe("Gamma Redeemer Resolver", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, vaultCounter);
+        .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
       expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(false);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
@@ -229,7 +236,7 @@ describe("Gamma Redeemer Resolver", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, vaultCounter);
+        .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
       const [vault] = await gammaRedeemer.getVaultWithDetails(
         sellerAddress,
@@ -248,7 +255,8 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
@@ -273,7 +281,7 @@ describe("Gamma Redeemer Resolver", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, vaultCounter);
+        .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
       const [vault] = await gammaRedeemer.getVaultWithDetails(
         sellerAddress,
@@ -310,7 +318,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(1000),
         vaultId: BigNumber.from(0),
         isSeller: false,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       });
@@ -320,7 +328,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(0),
         vaultId: BigNumber.from(1),
         isSeller: true,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       });
@@ -334,11 +342,11 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(1),
         vaultId: BigNumber.from(0),
         isSeller: false,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       };
-      const hash = await resolver.getOrderHash(buyOrder);
+      // const hash = await resolver.getOrderHash(buyOrder);
       expect(
         await resolver.containDuplicateOrderType(buyOrder, hashes)
       ).to.be.eq(true);
@@ -349,7 +357,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(0),
         vaultId: BigNumber.from(1),
         isSeller: true,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       };
@@ -364,7 +372,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(1),
         vaultId: BigNumber.from(0),
         isSeller: false,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       };
@@ -378,7 +386,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(0),
         vaultId: BigNumber.from(3),
         isSeller: true,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       };
@@ -396,7 +404,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(1000),
         vaultId: BigNumber.from(0),
         isSeller: false,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       });
@@ -419,7 +427,7 @@ describe("Gamma Redeemer Resolver", () => {
         amount: BigNumber.from(0),
         vaultId: BigNumber.from(1),
         isSeller: true,
-        toETH: false,
+        toToken: ZERO_ADDR,
         fee: BigNumber.from(0),
         finished: false,
       });
@@ -446,13 +454,14 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(false);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[]]
+        [[], []]
       );
       expect(execPayload).to.be.eq(taskData);
     });
@@ -463,7 +472,8 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
@@ -481,18 +491,31 @@ describe("Gamma Redeemer Resolver", () => {
       expect(canExecBefore).to.be.eq(true);
       const taskDataBefore = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[orderId]]
+        [
+          [orderId],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+          ],
+        ]
       );
       expect(execPayloadBefore).to.be.eq(taskDataBefore);
 
-      await gammaRedeemer.connect(deployer).processOrder(orderId);
+      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+        swapAmountOutMin: 0,
+        swapPath: [],
+        to: ZERO_ADDR,
+      });
 
       const [canExecAfter, execPayloadAfter] =
         await resolver.getProcessableOrders();
       expect(canExecAfter).to.be.eq(false);
       const taskDataAfter = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[]]
+        [[], []]
       );
       expect(execPayloadAfter).to.be.eq(taskDataAfter);
     });
@@ -503,21 +526,24 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
@@ -534,7 +560,16 @@ describe("Gamma Redeemer Resolver", () => {
       expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[orderId]]
+        [
+          [orderId],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+          ],
+        ]
       );
       expect(execPayload).to.be.eq(taskData);
     });
@@ -545,19 +580,23 @@ describe("Gamma Redeemer Resolver", () => {
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
       await gammaRedeemer
         .connect(buyer)
         .createOrder(
           ethPut.address,
           parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-          0
+          0,
+          ZERO_ADDR
         );
 
       const orderId3 = await gammaRedeemer.getOrdersLength();
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
@@ -573,7 +612,21 @@ describe("Gamma Redeemer Resolver", () => {
       expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[orderId1, orderId3]]
+        [
+          [orderId1, orderId3],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+          ],
+        ]
       );
       expect(execPayload).to.be.eq(taskData);
     });

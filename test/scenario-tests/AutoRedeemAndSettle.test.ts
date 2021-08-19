@@ -15,6 +15,7 @@ import { parseEther, parseUnits } from "ethers/lib/utils";
 import { setupGammaContracts } from "../helpers/setup/GammaSetup";
 import {
   ETH_TOKEN_ADDRESS,
+  UNISWAP_V2_ROUTER_02,
   USDC_ADDRESS,
   USDC_WALLET,
   WETH_ADDRESS,
@@ -73,6 +74,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
     [automator, automatorTreasury] = await setupGelatoContracts();
     [gammaRedeemer, resolver] = await setupAutoGammaContracts(
       deployer,
+      UNISWAP_V2_ROUTER_02,
       automator.address,
       automatorTreasury.address
     );
@@ -150,15 +152,27 @@ describe("Mainnet Fork: Auto Redeem", () => {
       buyerOrderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
-        .createOrder(ethPut.address, parseUnits("1", OTOKEN_DECIMALS), 0);
+        .createOrder(
+          ethPut.address,
+          parseUnits("1", OTOKEN_DECIMALS),
+          0,
+          ZERO_ADDR
+        );
       buyerOrderId2 = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
         .connect(buyer)
-        .createOrder(ethPut.address, parseUnits("1", OTOKEN_DECIMALS), 0);
+        .createOrder(
+          ethPut.address,
+          parseUnits("1", OTOKEN_DECIMALS),
+          0,
+          ZERO_ADDR
+        );
 
       sellerOrderId = await gammaRedeemer.getOrdersLength();
       vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer.connect(seller).createOrder(ZERO_ADDR, 0, vaultId);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
     });
 
     it("should redeem otoken & settle vault", async () => {
@@ -183,7 +197,21 @@ describe("Mainnet Fork: Auto Redeem", () => {
       expect(canExec).to.be.eq(true);
       const taskData = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[buyerOrderId, sellerOrderId]]
+        [
+          [buyerOrderId, sellerOrderId],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+          ],
+        ]
       );
       expect(execPayload).to.be.eq(taskData);
 
@@ -208,7 +236,16 @@ describe("Mainnet Fork: Auto Redeem", () => {
       expect(canExecSecond).to.be.eq(true);
       const taskDataSecond = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[buyerOrderId2]]
+        [
+          [buyerOrderId2],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+              to: ZERO_ADDR,
+            },
+          ],
+        ]
       );
       expect(execPayloadSecond).to.be.eq(taskDataSecond);
 
@@ -227,7 +264,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
       expect(canExecFinish).to.be.eq(false);
       const taskDataFinish = gammaRedeemer.interface.encodeFunctionData(
         "processOrders",
-        [[]]
+        [[], []]
       );
       expect(execPayloadFinish).to.be.eq(taskDataFinish);
 
