@@ -109,6 +109,8 @@ contract GammaRedeemerResolver is IResolver {
         uint256 counter;
         uint256[] memory orderIds = new uint256[](orderIdsLength);
 
+        // TODO: get orderArgs
+
             IGammaRedeemerV1.ProcessOrderArgs[] memory orderArgs
          = new IGammaRedeemerV1.ProcessOrderArgs[](orderIdsLength);
         for (uint256 i = 0; i < orders.length; i++) {

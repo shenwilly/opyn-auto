@@ -26,8 +26,6 @@ interface IGammaRedeemerV1 {
         uint256 swapAmountOutMin;
         // swap path
         address[] swapPath;
-        // send proceed to owner if address(0), else to
-        address to;
     }
 
     event OrderCreated(
