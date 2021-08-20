@@ -13,6 +13,7 @@ import {
   TaskTreasury,
   Oracle,
   PokeMe,
+  Swapper__factory,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
@@ -738,17 +739,36 @@ describe("GammaRedeemer", () => {
   });
 
   describe("swap()", async () => {
-    // it("should revert if sender is not owner", async () => {
-    //   await expectRevert(
-    //     gammaRedeemer.connect(buyer).setSettleFee(1),
-    //     "Ownable: caller is not the owner'"
-    //   );
-    // });
-    // it("should set pair to true", async () => {
-    //   const oldFee = await gammaRedeemer.settleFee();
-    //   const newFee = oldFee.add(1);
-    //   await gammaRedeemer.connect(deployer).setSettleFee(newFee);
-    //   expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
-    // });
+    it("should swap correctly", async () => {
+      const SwapperFactory = (await ethers.getContractFactory(
+        "Swapper",
+        deployer
+      )) as Swapper__factory;
+      const swapper = await SwapperFactory.deploy(
+        addressBook.address,
+        UNISWAP_V2_ROUTER_02,
+        automator.address,
+        automatorTreasury.address
+      );
+      const uniRouter = await ethers.getContractAt(
+        "IUniswapRouter",
+        UNISWAP_V2_ROUTER_02
+      );
+      const weth = await ethers.getContractAt("IERC20", WETH_ADDRESS);
+      const amount = parseUnits("10000", USDC_DECIMALS);
+      const path = [USDC_ADDRESS, WETH_ADDRESS];
+
+      await mintUsdc(amount, swapper.address);
+      const amounts = await uniRouter.getAmountsOut(amount, path);
+      const expectedOutputAmount = amounts[1];
+
+      await swapper.approve(USDC_ADDRESS, UNISWAP_V2_ROUTER_02, amount);
+
+      const balanceBefore = await weth.balanceOf(swapper.address);
+      await swapper.swapToken(amount, expectedOutputAmount, path);
+      const balanceAfter = await weth.balanceOf(swapper.address);
+
+      expect(balanceAfter.sub(balanceBefore)).to.be.eq(expectedOutputAmount);
+    });
   });
 });
