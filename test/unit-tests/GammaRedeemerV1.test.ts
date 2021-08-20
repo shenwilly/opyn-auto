@@ -202,6 +202,44 @@ describe("GammaRedeemer", () => {
         "GammaRedeemer::createOrder: Otoken not whitelisted"
       );
     });
+    it("should revert if otoken amount is 0 and otoken is address(0)", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).createOrder(ZERO_ADDR, 1, 1, ZERO_ADDR),
+        "GammaRedeemer::createOrder: Amount must be 0 when creating settlement order"
+      );
+    });
+    it("should revert if settlement token pair is same", async () => {
+      const collateralToken = await ethPut.collateralAsset();
+      await expectRevert(
+        gammaRedeemer
+          .connect(buyer)
+          .createOrder(
+            ethPut.address,
+            parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
+            0,
+            collateralToken
+          ),
+        "GammaRedeemer::createOrder: same settlement token and collateral"
+      );
+    });
+    it("should revert if settlement token pair is not allowed", async () => {
+      const collateral = await ethPut.collateralAsset();
+      expect(collateral).to.be.not.eq(WETH_ADDRESS);
+      expect(await gammaRedeemer.uniPair(collateral, WETH_ADDRESS)).to.be.eq(
+        false
+      );
+      await expectRevert(
+        gammaRedeemer
+          .connect(buyer)
+          .createOrder(
+            ethPut.address,
+            parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
+            0,
+            WETH_ADDRESS
+          ),
+        "GammaRedeemer::createOrder: settlement token not allowed"
+      );
+    });
     it("should create buyer order", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
@@ -239,6 +277,45 @@ describe("GammaRedeemer", () => {
       expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
+    it("should create buyer order (with toToken)", async () => {
+      const collateral = await ethPut.collateralAsset();
+      await gammaRedeemer.allowPair(collateral, WETH_ADDRESS);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      const tx = await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
+          0,
+          WETH_ADDRESS
+        );
+      const receipt = await tx.wait();
+      const event = receipt.events!.filter(
+        (event) => event.event == "OrderCreated"
+      )[0];
+      expect(event.args![0]).to.be.eq(orderId);
+
+      const [
+        orderOwner,
+        orderOtoken,
+        orderAmount,
+        orderVaultId,
+        orderIsSeller,
+        orderToToken,
+        orderFee,
+        orderFinished,
+      ] = await gammaRedeemer.orders(orderId);
+      expect(orderOwner).to.be.eq(buyerAddress);
+      expect(orderOtoken).to.be.eq(ethPut.address);
+      expect(orderAmount).to.be.eq(
+        parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
+      );
+      // expect(orderVaultId).to.be.eq(0);
+      expect(orderIsSeller).to.be.eq(false);
+      expect(orderToToken).to.be.eq(WETH_ADDRESS);
+      expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
+      expect(orderFinished).to.be.eq(false);
+    });
     it("should create seller order", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
@@ -266,6 +343,38 @@ describe("GammaRedeemer", () => {
       expect(orderVaultId).to.be.eq(1);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToToken).to.be.eq(ZERO_ADDR);
+      expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
+      expect(orderFinished).to.be.eq(false);
+    });
+    it("should create seller order (with toToken)", async () => {
+      const collateral = await ethPut.collateralAsset();
+      await gammaRedeemer.allowPair(collateral, WETH_ADDRESS);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      const tx = await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, 1, WETH_ADDRESS);
+      const receipt = await tx.wait();
+      const event = receipt.events!.filter(
+        (event) => event.event == "OrderCreated"
+      )[0];
+      expect(event.args![0]).to.be.eq(orderId);
+
+      const [
+        orderOwner,
+        orderOtoken,
+        orderAmount,
+        orderVaultId,
+        orderIsSeller,
+        orderToToken,
+        orderFee,
+        orderFinished,
+      ] = await gammaRedeemer.orders(orderId);
+      expect(orderOwner).to.be.eq(sellerAddress);
+      expect(orderOtoken).to.be.eq(ZERO_ADDR);
+      expect(orderAmount).to.be.eq(0);
+      expect(orderVaultId).to.be.eq(1);
+      expect(orderIsSeller).to.be.eq(true);
+      expect(orderToToken).to.be.eq(WETH_ADDRESS);
       expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });

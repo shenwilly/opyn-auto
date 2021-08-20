@@ -458,33 +458,6 @@ describe("GammaOperator", () => {
 
   describe("getRedeemPayout()", async () => {
     it("should return the same value as gamma controller", async () => {
-      // const strikePrice = parseUnits("175", STRIKE_PRICE_DECIMALS);
-      // const now = (await time.latest()).toNumber();
-      // const expiry = createValidExpiry(now, 1);
-
-      // const ethPut = await createOtoken(
-      //   otokenFactory,
-      //   WETH_ADDRESS,
-      //   USDC_ADDRESS,
-      //   USDC_ADDRESS,
-      //   parseUnits("200", STRIKE_PRICE_DECIMALS),
-      //   expiry,
-      //   true
-      // );
-
-      // await oracle.setExpiryPriceFinalizedAllPeiodOver(
-      //   WETH_ADDRESS,
-      //   expiry,
-      //   strikePrice,
-      //   true
-      // );
-      // await oracle.setExpiryPriceFinalizedAllPeiodOver(
-      //   USDC_ADDRESS,
-      //   expiry,
-      //   parseUnits("1", STRIKE_PRICE_DECIMALS),
-      //   true
-      // );
-
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
