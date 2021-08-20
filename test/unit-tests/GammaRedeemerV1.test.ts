@@ -667,4 +667,88 @@ describe("GammaRedeemer", () => {
       expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
     });
   });
+
+  describe("allowPair()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if pair is already allowed", async () => {
+      await gammaRedeemer
+        .connect(deployer)
+        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      await expectRevert(
+        gammaRedeemer.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "GammaRedeemer::allowPair: already allowed"
+      );
+    });
+    it("should set pair to true", async () => {
+      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+        false
+      );
+      await gammaRedeemer
+        .connect(deployer)
+        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+        true
+      );
+      expect(await gammaRedeemer.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
+        true
+      );
+    });
+  });
+
+  describe("disallowPair()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).disallowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if pair is already disallowed", async () => {
+      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+        false
+      );
+      await expectRevert(
+        gammaRedeemer
+          .connect(deployer)
+          .disallowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "GammaRedeemer::allowPair: already disallowed"
+      );
+    });
+    it("should set pair to true", async () => {
+      await gammaRedeemer
+        .connect(deployer)
+        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+        true
+      );
+      await gammaRedeemer
+        .connect(deployer)
+        .disallowPair(USDC_ADDRESS, WETH_ADDRESS);
+      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+        false
+      );
+      expect(await gammaRedeemer.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
+        false
+      );
+    });
+  });
+
+  describe("swap()", async () => {
+    // it("should revert if sender is not owner", async () => {
+    //   await expectRevert(
+    //     gammaRedeemer.connect(buyer).setSettleFee(1),
+    //     "Ownable: caller is not the owner'"
+    //   );
+    // });
+    // it("should set pair to true", async () => {
+    //   const oldFee = await gammaRedeemer.settleFee();
+    //   const newFee = oldFee.add(1);
+    //   await gammaRedeemer.connect(deployer).setSettleFee(newFee);
+    //   expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
+    // });
+  });
 });
