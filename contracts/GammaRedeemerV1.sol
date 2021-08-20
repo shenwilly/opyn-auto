@@ -128,6 +128,10 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
                 payoutToken = getOtokenCollateral(_otoken);
             }
             require(
+                payoutToken != _toToken,
+                "GammaRedeemer::createOrder: same settlement token and collateral"
+            );
+            require(
                 uniPair[payoutToken][_toToken],
                 "GammaRedeemer::createOrder: settlement token not allowed"
             );
@@ -239,6 +243,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
                     order.toToken == orderArgs.swapPath[1],
                 "GammaRedeemer::processOrder: Invalid swap path"
             );
+            require(
+                uniPair[payoutToken][order.toToken],
+                "GammaRedeemer::processOrder: token pair not allowed"
+            );
+
             IERC20(payoutToken).approve(address(uniRouter), payoutAmount);
             uint256[] memory amounts = swap(
                 payoutAmount,
