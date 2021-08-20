@@ -34,7 +34,7 @@ contract GammaOperator is Ownable {
     }
 
     /**
-     * @notice redeem otoken on behalf of user
+     * @notice redeem otoken on behalf of owner
      * @param _owner owner address
      * @param _otoken otoken address
      * @param _amount amount of otoken
@@ -67,7 +67,7 @@ contract GammaOperator is Ownable {
     }
 
     /**
-     * @notice settle vault on behalf of user
+     * @notice settle vault on behalf of owner
      * @param _owner owner address
      * @param _vaultId vaultId to settle
      */
@@ -240,6 +240,12 @@ contract GammaOperator is Ownable {
         return controller.getVaultWithDetails(_owner, _vaultId);
     }
 
+    /**
+     * @notice return a specific vault
+     * @param _owner owner address
+     * @param _vaultId vaultId
+     * @return vault struct
+     */
     function getVault(address _owner, uint256 _vaultId)
         public
         view
@@ -250,7 +256,7 @@ contract GammaOperator is Ownable {
 
     /**
      * @notice return the otoken from specific vault
-     * @param _vault vault struct
+     * @param _vault id of specific vault
      * @return otoken address
      */
     function getVaultOtokenByVault(MarginVault.Vault memory _vault)
@@ -266,6 +272,12 @@ contract GammaOperator is Ownable {
         return hasShort ? _vault.shortOtokens[0] : _vault.longOtokens[0];
     }
 
+    /**
+     * @notice return the otoken from specific vault
+     * @param _owner owner address
+     * @param _vaultId id of specific vault
+     * @return otoken address
+     */
     function getVaultOtoken(address _owner, uint256 _vaultId)
         public
         view
@@ -275,6 +287,11 @@ contract GammaOperator is Ownable {
         return getVaultOtokenByVault(vault);
     }
 
+    /**
+     * @notice return the collateral asset of a specific otoken
+     * @param _otoken otoken address
+     * @return collateral address
+     */
     function getOtokenCollateral(address _otoken)
         public
         view
