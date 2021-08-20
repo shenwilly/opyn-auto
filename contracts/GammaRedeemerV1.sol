@@ -52,6 +52,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         isAutomatorEnabled = false;
     }
 
+    /**
+     * @notice tell automator to start executing orders
+     * @param _resolver the address of automation resolver
+     * @dev automator will start calling resolver to fetch and execute processable orders
+     */
     function startAutomator(address _resolver) public onlyOwner {
         require(
             !isAutomatorEnabled,
@@ -60,12 +65,15 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         isAutomatorEnabled = true;
         automator.createTask(
             address(this),
-            bytes4(0x895f7952), //processOrders
+            bytes4(0x895f7952), //processOrders selector
             _resolver,
             abi.encodeWithSelector(IResolver.getProcessableOrders.selector)
         );
     }
 
+    /**
+     * @notice tell automator to stop executing orders
+     */
     function stopAutomator() public onlyOwner {
         require(
             isAutomatorEnabled,
@@ -76,7 +84,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             automator.getTaskId(
                 address(this),
                 address(this),
-                bytes4(0x895f7952) //processOrders
+                bytes4(0x895f7952) //processOrders selector
             )
         );
     }
@@ -86,6 +94,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      * @param _otoken the address of otoken (only holders)
      * @param _amount amount of otoken (only holders)
      * @param _vaultId the id of specific vault to settle (only writers)
+     * @param _toToken token address for custom token settlement
      */
     function createOrder(
         address _otoken,
@@ -259,21 +268,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         }
     }
 
-    function swap(
-        uint256 _amountIn,
-        uint256 _amountOutMin,
-        address[] calldata path
-    ) internal returns (uint256[] memory amounts) {
-        return
-            IUniswapRouter(uniRouter).swapExactTokensForTokens(
-                _amountIn,
-                _amountOutMin,
-                path,
-                address(this),
-                block.timestamp
-            );
-    }
-
     /**
      * @notice withdraw funds from automator
      * @param _token address of token to withdraw
@@ -281,6 +275,56 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
      */
     function withdrawFund(address _token, uint256 _amount) public onlyOwner {
         automatorTreasury.withdrawFunds(payable(this), _token, _amount);
+    }
+
+    /**
+     * @notice uniswap token swap
+     * @param _amountIn amount of token to swap
+     * @param _amountOutMin minimal amount of token to receive
+     * @param _path token pair to swap
+     * @return amounts amount of each tokens being swapped
+     */
+    function swap(
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        address[] calldata _path
+    ) internal returns (uint256[] memory amounts) {
+        return
+            IUniswapRouter(uniRouter).swapExactTokensForTokens(
+                _amountIn,
+                _amountOutMin,
+                _path,
+                address(this),
+                block.timestamp
+            );
+    }
+
+    /**
+     * @notice allow token pair for swap
+     * @param _token0 first token
+     * @param _token1 second token
+     */
+    function allowPair(address _token0, address _token1) public onlyOwner {
+        require(
+            !uniPair[_token0][_token1],
+            "GammaRedeemer::allowPair: already allowed"
+        );
+        uniPair[_token0][_token1] = true;
+        uniPair[_token1][_token0] = true;
+    }
+
+    /**
+     * @notice disallow token pair for swap
+     * @param _token0 first token
+     * @param _token1 second token
+     */
+    function disallowPair(address _token0, address _token1) public onlyOwner {
+        require(
+            uniPair[_token0][_token1],
+            "GammaRedeemer::allowPair: already disallowed"
+        );
+        uniPair[_token0][_token1] = false;
+        uniPair[_token1][_token0] = false;
     }
 
     function setUniRouter(address _uniRouter) public onlyOwner {
@@ -301,24 +345,6 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
 
     function setSettleFee(uint256 _settleFee) public onlyOwner {
         settleFee = _settleFee;
-    }
-
-    function allowPair(address _token0, address _token1) public onlyOwner {
-        require(
-            !uniPair[_token0][_token1],
-            "GammaRedeemer::allowPair: already allowed"
-        );
-        uniPair[_token0][_token1] = true;
-        uniPair[_token1][_token0] = true;
-    }
-
-    function disallowPair(address _token0, address _token1) public onlyOwner {
-        require(
-            uniPair[_token0][_token1],
-            "GammaRedeemer::allowPair: already disallowed"
-        );
-        uniPair[_token0][_token1] = false;
-        uniPair[_token1][_token0] = false;
     }
 
     function getOrdersLength() public view override returns (uint256) {
