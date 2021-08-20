@@ -71,6 +71,12 @@ contract GammaRedeemerResolver is IResolver {
         return true;
     }
 
+    /**
+     * @notice return payout of an order
+     * @param _orderId id of order
+     * @return payoutToken token address of payout
+     * @return payoutAmount amount of payout
+     */
     function getOrderPayout(uint256 _orderId)
         public
         view
