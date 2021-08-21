@@ -900,4 +900,48 @@ describe("GammaRedeemer", () => {
       expect(balanceAfter.sub(balanceBefore)).to.be.eq(expectedOutputAmount);
     });
   });
+
+  describe("startAutomator()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).startAutomator(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if already started", async () => {
+      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
+      await expectRevert(
+        gammaRedeemer.connect(deployer).startAutomator(deployerAddress),
+        "GammaRedeemer::startAutomator: already started"
+      );
+    });
+    it("should start automator", async () => {
+      await gammaRedeemer.connect(deployer).stopAutomator();
+      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(false);
+
+      await gammaRedeemer.startAutomator(deployerAddress);
+      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
+    });
+  });
+
+  describe("stopAutomator()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).startAutomator(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should revert if already stopped", async () => {
+      await gammaRedeemer.connect(deployer).stopAutomator();
+      await expectRevert(
+        gammaRedeemer.connect(deployer).stopAutomator(),
+        "GammaRedeemer::stopAutomator: already stopped"
+      );
+    });
+    it("should stop automator", async () => {
+      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
+      await gammaRedeemer.connect(deployer).stopAutomator();
+      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(false);
+    });
+  });
 });
