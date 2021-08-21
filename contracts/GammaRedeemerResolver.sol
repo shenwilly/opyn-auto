@@ -14,6 +14,8 @@ contract GammaRedeemerResolver is IResolver {
     address public redeemer;
     address public uniRouter;
 
+    uint256 public maxSlippage; // % uni price slippage
+
     constructor(address _redeemer, address _uniRouter) {
         redeemer = _redeemer;
         uniRouter = _uniRouter;
@@ -57,6 +59,17 @@ contract GammaRedeemerResolver is IResolver {
                 (uint256 payout, bool isValidVault) = IGammaOperator(redeemer)
                     .getExcessCollateral(vault, typeVault);
                 if (!isValidVault || payout == 0) return false;
+
+                if (order.toToken != address(0)) {
+                    address collateral = IGammaOperator(redeemer)
+                        .getOtokenCollateral(otoken);
+                    if (
+                        !IGammaRedeemerV1(redeemer).isPairAllowed(
+                            collateral,
+                            order.toToken
+                        )
+                    ) return false;
+                }
             } catch {
                 return false;
             }
@@ -66,6 +79,17 @@ contract GammaRedeemerResolver is IResolver {
                     order.otoken
                 )
             ) return false;
+
+            if (order.toToken != address(0)) {
+                address collateral = IGammaOperator(redeemer)
+                    .getOtokenCollateral(order.otoken);
+                if (
+                    !IGammaRedeemerV1(redeemer).isPairAllowed(
+                        collateral,
+                        order.toToken
+                    )
+                ) return false;
+            }
         }
 
         return true;

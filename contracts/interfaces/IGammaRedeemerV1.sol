@@ -59,4 +59,9 @@ interface IGammaRedeemerV1 {
     function getOrders() external view returns (Order[] memory);
 
     function getOrder(uint256 _orderId) external view returns (Order memory);
+
+    function isPairAllowed(address _token0, address _token1)
+        external
+        view
+        returns (bool);
 }
