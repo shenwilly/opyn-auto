@@ -686,6 +686,61 @@ describe("GammaRedeemer", () => {
     });
   });
 
+  describe("processOrders()", async () => {
+    beforeEach(async () => {
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(expiryPriceITM.toString(), STRIKE_PRICE_DECIMALS)
+      );
+    });
+
+    it("should revert if params length not equal", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(deployer).processOrders([1], []),
+        "GammaRedeemer::processOrders: Params lengths must be same"
+      );
+    });
+    it("should process orders", async () => {
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+      const orderId1 = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+
+      const orderId2 = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+
+      const balanceBefore1 = await usdc.balanceOf(buyerAddress);
+      const balanceBefore2 = await usdc.balanceOf(sellerAddress);
+      await gammaRedeemer.connect(deployer).processOrders(
+        [orderId1, orderId2],
+        [
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+        ]
+      );
+      const balanceAfter1 = await usdc.balanceOf(buyerAddress);
+      expect(balanceAfter1).to.be.gt(balanceBefore1);
+      const balanceAfter2 = await usdc.balanceOf(sellerAddress);
+      expect(balanceAfter2).to.be.gt(balanceBefore2);
+    });
+  });
+
   describe("withdrawFunds()", async () => {
     const amount = parseEther("1");
     beforeEach(async () => {
