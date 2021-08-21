@@ -14,11 +14,18 @@ contract GammaRedeemerResolver is IResolver {
     address public redeemer;
     address public uniRouter;
 
-    uint256 public maxSlippage; // % uni price slippage
+    uint256 public maxSlippage = 50; // 0.5%
+    address public owner;
 
     constructor(address _redeemer, address _uniRouter) {
         redeemer = _redeemer;
         uniRouter = _uniRouter;
+        owner = msg.sender;
+    }
+
+    function setMaxSlippage(uint256 _maxSlippage) public {
+        require(msg.sender == owner && _maxSlippage <= 500); // sanity check max slippage under 5%
+        maxSlippage = _maxSlippage;
     }
 
     /**
@@ -204,15 +211,21 @@ contract GammaRedeemerResolver is IResolver {
                         address payoutToken,
                         uint256 payoutAmount
                     ) = getOrderPayout(i);
+
                     payoutAmount =
                         payoutAmount -
-                        ((orders[i].fee * payoutAmount) / 10000);
+                        ((orders[i].fee * payoutAmount) / 10_000);
+
                     address[] memory path = new address[](2);
                     path[0] = payoutToken;
                     path[1] = orders[i].toToken;
+
                     uint256[] memory amounts = IUniswapRouter(uniRouter)
                         .getAmountsOut(payoutAmount, path);
-                    orderArgs[counter].swapAmountOutMin = amounts[1];
+                    uint256 amountOutMin = amounts[1] -
+                        ((amounts[1] * maxSlippage) / 10_000);
+
+                    orderArgs[counter].swapAmountOutMin = amountOutMin;
                     orderArgs[counter].swapPath = path;
                 }
 
