@@ -43,6 +43,7 @@ import {
   STRIKE_PRICE_DECIMALS,
   USDC_DECIMALS,
 } from "../../constants/decimals";
+import { setUniPair } from "../helpers/utils/AutoGammaUtils";
 const { time } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -248,6 +249,60 @@ describe("Gamma Redeemer Resolver", () => {
       ).to.be.eq(false);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
+    it("should return false if swap pair is not allowed (buyer)", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
+          0,
+          targetToken
+        );
+      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
+      );
+
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
+    });
+    it("should return false if swap pair is not allowed (seller)", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter, targetToken);
+      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
+      );
+
+      expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
+    });
     it("should return true if buy order could be processed", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
@@ -305,6 +360,27 @@ describe("Gamma Redeemer Resolver", () => {
       ).to.be.eq(true);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(true);
     });
+  });
+
+  describe("getOrderPayout()", async () => {
+    // it("should return empty list if no order is processable", async () => {
+    //   expect(await gammaRedeemer.getOrdersLength()).to.be.eq(0);
+    //   await gammaRedeemer
+    //     .connect(buyer)
+    //     .createOrder(
+    //       ethPut.address,
+    //       parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
+    //       0,
+    //       ZERO_ADDR
+    //     );
+    //   const [canExec, execPayload] = await resolver.getProcessableOrders();
+    //   expect(canExec).to.be.eq(false);
+    //   const taskData = gammaRedeemer.interface.encodeFunctionData(
+    //     "processOrders",
+    //     [[], []]
+    //   );
+    //   expect(execPayload).to.be.eq(taskData);
+    // });
   });
 
   describe("containDuplicateOrderType()", async () => {
