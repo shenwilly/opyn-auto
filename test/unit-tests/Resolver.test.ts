@@ -363,24 +363,51 @@ describe("Gamma Redeemer Resolver", () => {
   });
 
   describe("getOrderPayout()", async () => {
-    // it("should return empty list if no order is processable", async () => {
-    //   expect(await gammaRedeemer.getOrdersLength()).to.be.eq(0);
-    //   await gammaRedeemer
-    //     .connect(buyer)
-    //     .createOrder(
-    //       ethPut.address,
-    //       parseUnits(optionAmount.toString(), OTOKEN_DECIMALS),
-    //       0,
-    //       ZERO_ADDR
-    //     );
-    //   const [canExec, execPayload] = await resolver.getProcessableOrders();
-    //   expect(canExec).to.be.eq(false);
-    //   const taskData = gammaRedeemer.interface.encodeFunctionData(
-    //     "processOrders",
-    //     [[], []]
-    //   );
-    //   expect(execPayload).to.be.eq(taskData);
-    // });
+    it("should return correct buyer payout", async () => {
+      const orderId = await gammaRedeemer.getOrdersLength();
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
+      );
+
+      const payout = await controller.getPayout(ethPut.address, amount);
+      const [, payoutAmount] = await resolver.getOrderPayout(orderId);
+      expect(payoutAmount).to.be.eq(payout);
+    });
+    it("should return correct seller payout", async () => {
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+      const vaultCounter = await controller.getAccountVaultCounter(
+        sellerAddress
+      );
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
+      );
+
+      const proceed = await controller.getProceed(sellerAddress, vaultCounter);
+      const [, payoutAmount] = await resolver.getOrderPayout(orderId);
+      expect(payoutAmount).to.be.eq(proceed);
+    });
   });
 
   describe("containDuplicateOrderType()", async () => {
