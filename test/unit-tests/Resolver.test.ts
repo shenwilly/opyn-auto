@@ -44,7 +44,7 @@ import {
   USDC_DECIMALS,
 } from "../../constants/decimals";
 import { setUniPair } from "../helpers/utils/AutoGammaUtils";
-const { time } = require("@openzeppelin/test-helpers");
+const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
 
@@ -182,6 +182,23 @@ describe("Gamma Redeemer Resolver", () => {
         parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
     await controller.connect(seller).setOperator(gammaRedeemer.address, true);
+  });
+
+  describe("setMaxSlippage()", async () => {
+    it("should revert if not owner", async () => {
+      await expectRevert.unspecified(resolver.connect(buyer).setMaxSlippage(1));
+    });
+    it("should revert maxSlippage is higher than 500", async () => {
+      await expectRevert.unspecified(
+        resolver.connect(deployer).setMaxSlippage(10000)
+      );
+    });
+    it("should set new maxSlippage", async () => {
+      const newSlippage = 1;
+      expect(await resolver.maxSlippage()).to.not.be.eq(newSlippage);
+      await resolver.connect(deployer).setMaxSlippage(newSlippage);
+      expect(await resolver.maxSlippage()).to.be.eq(newSlippage);
+    });
   });
 
   describe("canProcessOrder()", async () => {
@@ -722,6 +739,84 @@ describe("Gamma Redeemer Resolver", () => {
             {
               swapAmountOutMin: 0,
               swapPath: [],
+            },
+          ],
+        ]
+      );
+      expect(execPayload).to.be.eq(taskData);
+    });
+    it("should return list of processable orders (with toToken)", async () => {
+      const uniRouter = await ethers.getContractAt(
+        "IUniswapRouter",
+        UNISWAP_V2_ROUTER_02
+      );
+
+      const collateral = await ethPut.collateralAsset();
+      const targetToken = WETH_ADDRESS;
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+
+      const orderId1 = await gammaRedeemer.getOrdersLength();
+      const order1Amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, order1Amount, 0, targetToken);
+
+      const orderId2 = await gammaRedeemer.getOrdersLength();
+      const vaultId = await controller.getAccountVaultCounter(sellerAddress);
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, targetToken);
+
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
+      );
+
+      const path = [collateral, targetToken];
+      const maxSlippage = await resolver.maxSlippage();
+
+      let order1Payout = await controller.getPayout(
+        ethPut.address,
+        order1Amount
+      );
+      const [, , , , , , order1Fee, ,] = await gammaRedeemer.orders(orderId1);
+      const order1FeeTotal = order1Fee.mul(order1Payout).div(10000);
+      order1Payout = order1Payout.sub(order1FeeTotal);
+      const order1Amounts = await uniRouter.getAmountsOut(order1Payout, path);
+      let order1AmountOutMin = order1Amounts[1];
+      order1AmountOutMin = order1AmountOutMin.sub(
+        order1AmountOutMin.mul(maxSlippage).div(10000)
+      );
+
+      let order2Payout = await controller.getProceed(sellerAddress, vaultId);
+      const [, , , , , , order2Fee, ,] = await gammaRedeemer.orders(orderId2);
+      const order2FeeTotal = order2Fee.mul(order2Payout).div(10000);
+      order2Payout = order2Payout.sub(order2FeeTotal);
+      let order2Amounts = await uniRouter.getAmountsOut(order2Payout, path);
+      let order2AmountOutMin = order2Amounts[1];
+      order2AmountOutMin = order2AmountOutMin.sub(
+        order2AmountOutMin.mul(maxSlippage).div(10000)
+      );
+
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
+      const taskData = gammaRedeemer.interface.encodeFunctionData(
+        "processOrders",
+        [
+          [orderId1, orderId2],
+          [
+            {
+              swapAmountOutMin: order1AmountOutMin,
+              swapPath: path,
+            },
+            {
+              swapAmountOutMin: order2AmountOutMin,
+              swapPath: path,
             },
           ],
         ]
