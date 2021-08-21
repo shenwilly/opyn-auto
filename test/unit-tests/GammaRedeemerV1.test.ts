@@ -321,7 +321,7 @@ describe("GammaRedeemer", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 1, ZERO_ADDR);
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderCreated"
@@ -341,7 +341,7 @@ describe("GammaRedeemer", () => {
       expect(orderOwner).to.be.eq(sellerAddress);
       expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
-      expect(orderVaultId).to.be.eq(1);
+      expect(orderVaultId).to.be.eq(vaultId);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToToken).to.be.eq(ZERO_ADDR);
       expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
@@ -353,7 +353,7 @@ describe("GammaRedeemer", () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       const tx = await gammaRedeemer
         .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 1, WETH_ADDRESS);
+        .createOrder(ZERO_ADDR, 0, vaultId, WETH_ADDRESS);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderCreated"
@@ -373,7 +373,7 @@ describe("GammaRedeemer", () => {
       expect(orderOwner).to.be.eq(sellerAddress);
       expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
-      expect(orderVaultId).to.be.eq(1);
+      expect(orderVaultId).to.be.eq(vaultId);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToToken).to.be.eq(WETH_ADDRESS);
       expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
