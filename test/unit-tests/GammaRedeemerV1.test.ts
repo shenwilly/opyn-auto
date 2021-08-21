@@ -669,6 +669,22 @@ describe("GammaRedeemer", () => {
     });
   });
 
+  describe("setUniRouter()", async () => {
+    it("should revert if sender is not owner", async () => {
+      await expectRevert(
+        gammaRedeemer.connect(buyer).setUniRouter(deployerAddress),
+        "Ownable: caller is not the owner'"
+      );
+    });
+    it("should set new automator treasury", async () => {
+      const oldRouter = await gammaRedeemer.uniRouter();
+      const newRouter = deployerAddress;
+      expect(oldRouter).to.be.not.eq(newRouter);
+      await gammaRedeemer.connect(deployer).setUniRouter(deployerAddress);
+      expect(await gammaRedeemer.uniRouter()).to.be.eq(newRouter);
+    });
+  });
+
   describe("allowPair()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
