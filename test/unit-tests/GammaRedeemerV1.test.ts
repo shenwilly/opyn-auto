@@ -45,6 +45,7 @@ import {
   getOrCreateOtoken,
 } from "../helpers/utils/GammaUtils";
 import { mintUsdc } from "../helpers/utils/token";
+import { setUniPair } from "../helpers/utils/AutoGammaUtils";
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
 
 const { expect } = chai;
@@ -69,6 +70,7 @@ describe("GammaRedeemer", () => {
   let resolver: GammaRedeemerResolver;
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
+  let uniRouter: Contract;
 
   let usdc: Contract;
   let ethPut: Otoken;
@@ -109,6 +111,10 @@ describe("GammaRedeemer", () => {
     );
 
     usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
+    uniRouter = await ethers.getContractAt(
+      "IUniswapRouter",
+      UNISWAP_V2_ROUTER_02
+    );
 
     await whitelistCollateral(whitelist, USDC_ADDRESS);
     await whitelistCollateral(whitelist, WETH_ADDRESS);
@@ -532,12 +538,66 @@ describe("GammaRedeemer", () => {
         );
 
       await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
-      await expect(
+      await expectRevert(
         gammaRedeemer.processOrder(orderId, {
           swapAmountOutMin: 0,
           swapPath: [],
-        })
-      ).to.be.reverted;
+        }),
+        "GammaRedeemer::processOrder: Order should not be processed"
+      );
+    });
+    it("should revert if path swap is invalid", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await gammaRedeemer.setRedeemFee(0);
+
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, targetToken);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+
+      const payout = await controller.getPayout(ethPut.address, amount);
+      const path = [collateral, targetToken];
+      const amounts = await uniRouter.getAmountsOut(payout, path);
+
+      await expectRevert(
+        gammaRedeemer.connect(deployer).processOrder(orderId, {
+          swapAmountOutMin: amounts[1],
+          swapPath: [targetToken, collateral],
+        }),
+        "GammaRedeemer::processOrder: Invalid swap path"
+      );
+    });
+    it("should revert if pair is not allowed", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await gammaRedeemer.setRedeemFee(0);
+
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, targetToken);
+      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+
+      const payout = await controller.getPayout(ethPut.address, amount);
+      const path = [collateral, targetToken];
+      const amounts = await uniRouter.getAmountsOut(payout, path);
+
+      await expectRevert(
+        gammaRedeemer.connect(deployer).processOrder(orderId, {
+          swapAmountOutMin: amounts[1],
+          swapPath: path,
+        }),
+        "GammaRedeemer::processOrder: token pair not allowed"
+      );
     });
     it("should redeemOtoken if isSeller is false", async () => {
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
@@ -555,6 +615,33 @@ describe("GammaRedeemer", () => {
       const balanceAfter = await usdc.balanceOf(buyerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
+    it("should redeemOtoken if isSeller is false (with toToken)", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      const token = await ethers.getContractAt("IERC20", targetToken);
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await gammaRedeemer.setRedeemFee(0);
+
+      const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(buyer)
+        .createOrder(ethPut.address, amount, 0, targetToken);
+
+      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+
+      const payout = await controller.getPayout(ethPut.address, amount);
+      const path = [collateral, targetToken];
+      const amounts = await uniRouter.getAmountsOut(payout, path);
+
+      const balanceBefore = await token.balanceOf(buyerAddress);
+      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+        swapAmountOutMin: amounts[1],
+        swapPath: path,
+      });
+      const balanceAfter = await token.balanceOf(buyerAddress);
+      expect(balanceAfter.sub(balanceBefore)).to.be.eq(amounts[1]);
+    });
     it("should settleVault if isSeller is true", async () => {
       const orderId = await gammaRedeemer.getOrdersLength();
       await gammaRedeemer
@@ -570,6 +657,32 @@ describe("GammaRedeemer", () => {
       });
       const balanceAfter = await usdc.balanceOf(sellerAddress);
       expect(balanceAfter).to.be.gt(balanceBefore);
+    });
+    it("should settleVault if isSeller is true (with toToken)", async () => {
+      const collateral = await ethPut.collateralAsset(); // USDC
+      const targetToken = WETH_ADDRESS;
+      const token = await ethers.getContractAt("IERC20", targetToken);
+      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await gammaRedeemer.setSettleFee(0);
+
+      const orderId = await gammaRedeemer.getOrdersLength();
+      await gammaRedeemer
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, targetToken);
+
+      await setOperator(seller, controller, gammaRedeemer.address, true);
+
+      const proceed = await controller.getProceed(sellerAddress, vaultId);
+      const path = [collateral, targetToken];
+      const amounts = await uniRouter.getAmountsOut(proceed, path);
+
+      const balanceBefore = await token.balanceOf(sellerAddress);
+      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+        swapAmountOutMin: amounts[1],
+        swapPath: path,
+      });
+      const balanceAfter = await token.balanceOf(sellerAddress);
+      expect(balanceAfter.sub(balanceBefore)).to.be.eq(amounts[1]);
     });
   });
 
