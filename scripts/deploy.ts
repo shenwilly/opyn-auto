@@ -1,9 +1,10 @@
 import { ethers } from "hardhat";
+import { UNISWAP_V2_ROUTER_02 } from "../constants/address";
 import {
-  GammaRedeemerResolver,
-  GammaRedeemerResolver__factory,
-  GammaRedeemerV1,
-  GammaRedeemerV1__factory,
+  AutoGammaResolver,
+  AutoGammaResolver__factory,
+  AutoGamma,
+  AutoGamma__factory,
 } from "../typechain";
 
 async function main() {
@@ -11,27 +12,27 @@ async function main() {
   const TreasuryAddress = "0x66e2F69df68C8F56837142bE2E8C290EfE76DA9f";
   const GammaAddressBookAddress = "0x1E31F2DCBad4dc572004Eae6355fB18F9615cBe4";
 
-  const GammaRedeemerFactory = (
-    await ethers.getContractFactory("GammaRedeemerV1")
-  ) as GammaRedeemerV1__factory;
-  let gammaRedeemer = (
-    await GammaRedeemerFactory.deploy(GammaAddressBookAddress, PokeMeAddress, TreasuryAddress)
-  ) as GammaRedeemerV1;
+  const AutoGammaFactory = (
+    await ethers.getContractFactory("AutoGamma")
+  ) as AutoGamma__factory;
+  let autoGamma = (
+    await AutoGammaFactory.deploy(GammaAddressBookAddress, UNISWAP_V2_ROUTER_02, PokeMeAddress, TreasuryAddress)
+  ) as AutoGamma;
 
-  console.log(gammaRedeemer.address);
-  console.log(gammaRedeemer.deployTransaction.hash);
-  await gammaRedeemer.deployed();
+  console.log(autoGamma.address);
+  console.log(autoGamma.deployTransaction.hash);
+  await autoGamma.deployed();
 
-  const GammaRedeemerResolverFactory = (
-    await ethers.getContractFactory("GammaRedeemerResolver")
-  ) as GammaRedeemerResolver__factory;
-  let resolver = (await GammaRedeemerResolverFactory.deploy(gammaRedeemer.address)) as GammaRedeemerResolver;
+  const AutoGammaResolverFactory = (
+    await ethers.getContractFactory("AutoGammaResolver")
+  ) as AutoGammaResolver__factory;
+  let resolver = (await AutoGammaResolverFactory.deploy(autoGamma.address, UNISWAP_V2_ROUTER_02)) as AutoGammaResolver;
 
   console.log(resolver.address);
   console.log(resolver.deployTransaction.hash);
   await resolver.deployed();
   
-  const tx = await gammaRedeemer.startAutomator(resolver.address);
+  const tx = await autoGamma.startAutomator(resolver.address);
   console.log(tx.hash);
 
   console.log("FINISHED");
