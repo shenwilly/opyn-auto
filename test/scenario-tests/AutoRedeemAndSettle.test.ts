@@ -4,10 +4,10 @@ import {
   Controller,
   Otoken,
   MarginPool,
-  GammaRedeemerV1,
+  AutoGamma,
+  AutoGammaResolver,
   PokeMe,
   TaskTreasury,
-  GammaRedeemerResolver,
   Oracle,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -43,7 +43,7 @@ const { expect } = chai;
 // oWETHUSDC/USDC-20AUG21-2300P
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
 
-describe("Mainnet Fork: Auto Redeem", () => {
+describe("Scenario: Auto Redeem", () => {
   let deployer: SignerWithAddress;
 
   let buyer: SignerWithAddress;
@@ -54,8 +54,8 @@ describe("Mainnet Fork: Auto Redeem", () => {
   let controller: Controller;
   let marginPool: MarginPool;
   let oracle: Oracle;
-  let gammaRedeemer: GammaRedeemerV1;
-  let resolver: GammaRedeemerResolver;
+  let autoGamma: AutoGamma;
+  let resolver: AutoGammaResolver;
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
@@ -72,7 +72,7 @@ describe("Mainnet Fork: Auto Redeem", () => {
 
     [, , , oracle, marginPool, , controller] = await setupGammaContracts();
     [automator, automatorTreasury] = await setupGelatoContracts();
-    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+    [autoGamma, resolver] = await setupAutoGammaContracts(
       deployer,
       UNISWAP_V2_ROUTER_02,
       automator.address,
@@ -121,12 +121,12 @@ describe("Mainnet Fork: Auto Redeem", () => {
       .transfer(buyerAddress, parseUnits("2", OTOKEN_DECIMALS));
     await ethPut
       .connect(buyer)
-      .approve(gammaRedeemer.address, parseUnits("2", OTOKEN_DECIMALS));
-    await setOperator(seller, controller, gammaRedeemer.address, true);
-    await gammaRedeemer.startAutomator(resolver.address);
+      .approve(autoGamma.address, parseUnits("2", OTOKEN_DECIMALS));
+    await setOperator(seller, controller, autoGamma.address, true);
+    await autoGamma.startAutomator(resolver.address);
     await automatorTreasury
       .connect(deployer)
-      .depositFunds(gammaRedeemer.address, ETH_TOKEN_ADDRESS, 0, {
+      .depositFunds(autoGamma.address, ETH_TOKEN_ADDRESS, 0, {
         value: parseEther("0.1"),
       });
   });
@@ -149,8 +149,8 @@ describe("Mainnet Fork: Auto Redeem", () => {
         parseUnits(strikePrice, STRIKE_PRICE_DECIMALS)
       );
 
-      buyerOrderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      buyerOrderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -158,8 +158,8 @@ describe("Mainnet Fork: Auto Redeem", () => {
           0,
           ZERO_ADDR
         );
-      buyerOrderId2 = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      buyerOrderId2 = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -168,9 +168,9 @@ describe("Mainnet Fork: Auto Redeem", () => {
           ZERO_ADDR
         );
 
-      sellerOrderId = await gammaRedeemer.getOrdersLength();
+      sellerOrderId = await autoGamma.getOrdersLength();
       vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
     });
@@ -182,35 +182,28 @@ describe("Mainnet Fork: Auto Redeem", () => {
       );
       const sellerProceed = await controller.getProceed(sellerAddress, vaultId);
 
-      const contractBalanceBefore = await usdc.balanceOf(gammaRedeemer.address);
+      const contractBalanceBefore = await usdc.balanceOf(autoGamma.address);
       const buyerBalanceBefore = await usdc.balanceOf(buyerAddress);
       const sellerBalanceBefore = await usdc.balanceOf(sellerAddress);
 
-      expect(await gammaRedeemer.shouldProcessOrder(buyerOrderId)).to.be.eq(
-        true
-      );
-      expect(await gammaRedeemer.shouldProcessOrder(sellerOrderId)).to.be.eq(
-        true
-      );
+      expect(await autoGamma.shouldProcessOrder(buyerOrderId)).to.be.eq(true);
+      expect(await autoGamma.shouldProcessOrder(sellerOrderId)).to.be.eq(true);
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(true);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrders",
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [buyerOrderId, sellerOrderId],
         [
-          [buyerOrderId, sellerOrderId],
-          [
-            {
-              swapAmountOutMin: 0,
-              swapPath: [],
-            },
-            {
-              swapAmountOutMin: 0,
-              swapPath: [],
-            },
-          ],
-        ]
-      );
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+        ],
+      ]);
       expect(execPayload).to.be.eq(taskData);
 
       const gelato = await automator.gelato();
@@ -224,15 +217,15 @@ describe("Mainnet Fork: Auto Redeem", () => {
         .exec(
           parseEther("0.02"),
           ETH_TOKEN_ADDRESS,
-          gammaRedeemer.address,
-          gammaRedeemer.address,
+          autoGamma.address,
+          autoGamma.address,
           taskData
         );
 
       const [canExecSecond, execPayloadSecond] =
         await resolver.getProcessableOrders();
       expect(canExecSecond).to.be.eq(true);
-      const taskDataSecond = gammaRedeemer.interface.encodeFunctionData(
+      const taskDataSecond = autoGamma.interface.encodeFunctionData(
         "processOrders",
         [
           [buyerOrderId2],
@@ -251,31 +244,31 @@ describe("Mainnet Fork: Auto Redeem", () => {
         .exec(
           parseEther("0.01"),
           ETH_TOKEN_ADDRESS,
-          gammaRedeemer.address,
-          gammaRedeemer.address,
+          autoGamma.address,
+          autoGamma.address,
           taskDataSecond
         );
 
       const [canExecFinish, execPayloadFinish] =
         await resolver.getProcessableOrders();
       expect(canExecFinish).to.be.eq(false);
-      const taskDataFinish = gammaRedeemer.interface.encodeFunctionData(
+      const taskDataFinish = autoGamma.interface.encodeFunctionData(
         "processOrders",
         [[], []]
       );
       expect(execPayloadFinish).to.be.eq(taskDataFinish);
 
-      const contractBalanceAfter = await usdc.balanceOf(gammaRedeemer.address);
+      const contractBalanceAfter = await usdc.balanceOf(autoGamma.address);
       const buyerBalanceAfter = await usdc.balanceOf(buyerAddress);
       const sellerBalanceAfter = await usdc.balanceOf(sellerAddress);
 
       const buyerDifference = buyerBalanceAfter.sub(buyerBalanceBefore);
-      const buyerFee = await gammaRedeemer.redeemFee();
+      const buyerFee = await autoGamma.redeemFee();
       const buyerFeeTotal = buyerFee.mul(buyerPayout).div(10000);
       expect(buyerDifference).to.be.eq(buyerPayout.sub(buyerFeeTotal));
 
       const sellerDifference = sellerBalanceAfter.sub(sellerBalanceBefore);
-      const sellerFee = await gammaRedeemer.settleFee();
+      const sellerFee = await autoGamma.settleFee();
       const sellerFeeTotal = sellerFee.mul(sellerProceed).div(10000);
       expect(sellerDifference).to.be.eq(sellerProceed.sub(sellerFeeTotal));
 

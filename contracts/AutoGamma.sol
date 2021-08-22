@@ -2,7 +2,7 @@
 pragma solidity 0.8.0;
 
 import {GammaOperator} from "./GammaOperator.sol";
-import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
+import {IAutoGamma} from "./interfaces/IAutoGamma.sol";
 import {IUniswapRouter} from "./interfaces/IUniswapRouter.sol";
 import {IPokeMe} from "./interfaces/IPokeMe.sol";
 import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
@@ -11,9 +11,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @author Willy Shen
-/// @title Gamma Automatic Redeemer
+/// @title Opyn Gamma Automatic Redeemer
 /// @notice An automatic redeemer for Gamma otoken holders and writers
-contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
+contract AutoGamma is IAutoGamma, GammaOperator {
     using SafeERC20 for IERC20;
 
     Order[] public orders;
@@ -35,7 +35,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     modifier onlyAuthorized() {
         require(
             msg.sender == address(automator) || msg.sender == owner(),
-            "GammaRedeemer::onlyAuthorized: Only automator or owner"
+            "AutoGamma::onlyAuthorized: Only automator or owner"
         );
         _;
     }
@@ -60,7 +60,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function startAutomator(address _resolver) public onlyOwner {
         require(
             !isAutomatorEnabled,
-            "GammaRedeemer::startAutomator: already started"
+            "AutoGamma::startAutomator: already started"
         );
         isAutomatorEnabled = true;
         automator.createTask(
@@ -77,7 +77,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function stopAutomator() public onlyOwner {
         require(
             isAutomatorEnabled,
-            "GammaRedeemer::stopAutomator: already stopped"
+            "AutoGamma::stopAutomator: already stopped"
         );
         isAutomatorEnabled = false;
         automator.cancelTask(
@@ -107,14 +107,14 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         if (_otoken == address(0)) {
             require(
                 _amount == 0,
-                "GammaRedeemer::createOrder: Amount must be 0 when creating settlement order"
+                "AutoGamma::createOrder: Amount must be 0 when creating settlement order"
             );
             fee = settleFee;
             isSeller = true;
         } else {
             require(
                 isWhitelistedOtoken(_otoken),
-                "GammaRedeemer::createOrder: Otoken not whitelisted"
+                "AutoGamma::createOrder: Otoken not whitelisted"
             );
             fee = redeemFee;
         }
@@ -129,11 +129,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             }
             require(
                 payoutToken != _toToken,
-                "GammaRedeemer::createOrder: same settlement token and collateral"
+                "AutoGamma::createOrder: same settlement token and collateral"
             );
             require(
                 uniPair[payoutToken][_toToken],
-                "GammaRedeemer::createOrder: settlement token not allowed"
+                "AutoGamma::createOrder: settlement token not allowed"
             );
         }
 
@@ -160,11 +160,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         Order storage order = orders[_orderId];
         require(
             order.owner == msg.sender,
-            "GammaRedeemer::cancelOrder: Sender is not order owner"
+            "AutoGamma::cancelOrder: Sender is not order owner"
         );
         require(
             !order.finished,
-            "GammaRedeemer::cancelOrder: Order is already finished"
+            "AutoGamma::cancelOrder: Order is already finished"
         );
 
         order.finished = true;
@@ -213,7 +213,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
         Order storage order = orders[_orderId];
         require(
             shouldProcessOrder(_orderId),
-            "GammaRedeemer::processOrder: Order should not be processed"
+            "AutoGamma::processOrder: Order should not be processed"
         );
         order.finished = true;
 
@@ -241,11 +241,11 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
             require(
                 payoutToken == orderArgs.swapPath[0] &&
                     order.toToken == orderArgs.swapPath[1],
-                "GammaRedeemer::processOrder: Invalid swap path"
+                "AutoGamma::processOrder: Invalid swap path"
             );
             require(
                 uniPair[payoutToken][order.toToken],
-                "GammaRedeemer::processOrder: token pair not allowed"
+                "AutoGamma::processOrder: token pair not allowed"
             );
 
             IERC20(payoutToken).approve(address(uniRouter), payoutAmount);
@@ -270,7 +270,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     ) public override {
         require(
             _orderIds.length == _orderArgs.length,
-            "GammaRedeemer::processOrders: Params lengths must be same"
+            "AutoGamma::processOrders: Params lengths must be same"
         );
         for (uint256 i = 0; i < _orderIds.length; i++) {
             processOrder(_orderIds[i], _orderArgs[i]);
@@ -316,7 +316,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function allowPair(address _token0, address _token1) public onlyOwner {
         require(
             !uniPair[_token0][_token1],
-            "GammaRedeemer::allowPair: already allowed"
+            "AutoGamma::allowPair: already allowed"
         );
         uniPair[_token0][_token1] = true;
         uniPair[_token1][_token0] = true;
@@ -330,7 +330,7 @@ contract GammaRedeemerV1 is IGammaRedeemerV1, GammaOperator {
     function disallowPair(address _token0, address _token1) public onlyOwner {
         require(
             uniPair[_token0][_token1],
-            "GammaRedeemer::allowPair: already disallowed"
+            "AutoGamma::allowPair: already disallowed"
         );
         uniPair[_token0][_token1] = false;
         uniPair[_token1][_token0] = false;

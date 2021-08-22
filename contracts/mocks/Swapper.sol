@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import {GammaRedeemerV1} from "../GammaRedeemerV1.sol";
+import {AutoGamma} from "../AutoGamma.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Swapper is GammaRedeemerV1 {
+contract Swapper is AutoGamma {
     using SafeERC20 for IERC20;
 
     constructor(
@@ -14,12 +14,7 @@ contract Swapper is GammaRedeemerV1 {
         address _automator,
         address _automatorTreasury
     )
-        GammaRedeemerV1(
-            _gammaAddressBook,
-            _uniRouter,
-            _automator,
-            _automatorTreasury
-        )
+        AutoGamma(_gammaAddressBook, _uniRouter, _automator, _automatorTreasury)
     {}
 
     function approve(

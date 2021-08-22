@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-interface IGammaRedeemerV1 {
+interface IAutoGamma {
     struct Order {
         // address of user
         address owner;

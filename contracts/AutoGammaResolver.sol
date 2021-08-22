@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.0;
 
-import {IGammaRedeemerV1} from "./interfaces/IGammaRedeemerV1.sol";
+import {IAutoGamma} from "./interfaces/IAutoGamma.sol";
 import {IGammaOperator} from "./interfaces/IGammaOperator.sol";
 import {IResolver} from "./interfaces/IResolver.sol";
 import {MarginVault} from "./external/OpynVault.sol";
 import {IUniswapRouter} from "./interfaces/IUniswapRouter.sol";
 
 /// @author Willy Shen
-/// @title GammaRedeemer Resolver
-/// @notice A GammaRedeemer resolver for Gelato PokeMe checks
-contract GammaRedeemerResolver is IResolver {
+/// @title AutoGamma Resolver
+/// @notice AutoGamma resolver for Gelato PokeMe checks
+contract AutoGammaResolver is IResolver {
     address public redeemer;
     address public uniRouter;
 
@@ -34,8 +34,7 @@ contract GammaRedeemerResolver is IResolver {
      * @return true if order can be proceseed without a revert
      */
     function canProcessOrder(uint256 _orderId) public view returns (bool) {
-        IGammaRedeemerV1.Order memory order = IGammaRedeemerV1(redeemer)
-            .getOrder(_orderId);
+        IAutoGamma.Order memory order = IAutoGamma(redeemer).getOrder(_orderId);
 
         if (order.isSeller) {
             if (
@@ -71,7 +70,7 @@ contract GammaRedeemerResolver is IResolver {
                     address collateral = IGammaOperator(redeemer)
                         .getOtokenCollateral(otoken);
                     if (
-                        !IGammaRedeemerV1(redeemer).isPairAllowed(
+                        !IAutoGamma(redeemer).isPairAllowed(
                             collateral,
                             order.toToken
                         )
@@ -91,7 +90,7 @@ contract GammaRedeemerResolver is IResolver {
                 address collateral = IGammaOperator(redeemer)
                     .getOtokenCollateral(order.otoken);
                 if (
-                    !IGammaRedeemerV1(redeemer).isPairAllowed(
+                    !IAutoGamma(redeemer).isPairAllowed(
                         collateral,
                         order.toToken
                     )
@@ -113,8 +112,7 @@ contract GammaRedeemerResolver is IResolver {
         view
         returns (address payoutToken, uint256 payoutAmount)
     {
-        IGammaRedeemerV1.Order memory order = IGammaRedeemerV1(redeemer)
-            .getOrder(_orderId);
+        IAutoGamma.Order memory order = IAutoGamma(redeemer).getOrder(_orderId);
 
         if (order.isSeller) {
             (
@@ -167,8 +165,7 @@ contract GammaRedeemerResolver is IResolver {
         override
         returns (bool canExec, bytes memory execPayload)
     {
-        IGammaRedeemerV1.Order[] memory orders = IGammaRedeemerV1(redeemer)
-            .getOrders();
+        IAutoGamma.Order[] memory orders = IAutoGamma(redeemer).getOrders();
 
         // Only proceess duplicate orders one at a time
         bytes32[] memory preCheckHashes = new bytes32[](orders.length);
@@ -177,7 +174,7 @@ contract GammaRedeemerResolver is IResolver {
         uint256 orderIdsLength;
         for (uint256 i = 0; i < orders.length; i++) {
             if (
-                IGammaRedeemerV1(redeemer).shouldProcessOrder(i) &&
+                IAutoGamma(redeemer).shouldProcessOrder(i) &&
                 canProcessOrder(i) &&
                 !containDuplicateOrderType(orders[i], preCheckHashes)
             ) {
@@ -194,11 +191,11 @@ contract GammaRedeemerResolver is IResolver {
         uint256[] memory orderIds = new uint256[](orderIdsLength);
 
 
-            IGammaRedeemerV1.ProcessOrderArgs[] memory orderArgs
-         = new IGammaRedeemerV1.ProcessOrderArgs[](orderIdsLength);
+            IAutoGamma.ProcessOrderArgs[] memory orderArgs
+         = new IAutoGamma.ProcessOrderArgs[](orderIdsLength);
         for (uint256 i = 0; i < orders.length; i++) {
             if (
-                IGammaRedeemerV1(redeemer).shouldProcessOrder(i) &&
+                IAutoGamma(redeemer).shouldProcessOrder(i) &&
                 canProcessOrder(i) &&
                 !containDuplicateOrderType(orders[i], postCheckHashes)
             ) {
@@ -234,7 +231,7 @@ contract GammaRedeemerResolver is IResolver {
         }
 
         execPayload = abi.encodeWithSelector(
-            IGammaRedeemerV1.processOrders.selector,
+            IAutoGamma.processOrders.selector,
             orderIds,
             orderArgs
         );
@@ -247,7 +244,7 @@ contract GammaRedeemerResolver is IResolver {
      * @return containDuplicate if hashes already contain a same order type.
      */
     function containDuplicateOrderType(
-        IGammaRedeemerV1.Order memory order,
+        IAutoGamma.Order memory order,
         bytes32[] memory hashes
     ) public pure returns (bool containDuplicate) {
         bytes32 orderHash = getOrderHash(order);
@@ -265,7 +262,7 @@ contract GammaRedeemerResolver is IResolver {
      * @param order struct to hash
      * @return orderHash hash depending on the order's type
      */
-    function getOrderHash(IGammaRedeemerV1.Order memory order)
+    function getOrderHash(IAutoGamma.Order memory order)
         public
         pure
         returns (bytes32 orderHash)

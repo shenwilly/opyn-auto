@@ -8,10 +8,10 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  GammaRedeemerV1,
+  AutoGamma,
   PokeMe,
   TaskTreasury,
-  GammaRedeemerResolver,
+  AutoGammaResolver,
   Oracle,
 } from "../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -62,8 +62,8 @@ describe("Gamma Redeemer Resolver", () => {
   let calculator: MarginCalculator;
   let oracle: Oracle;
   let controller: Controller;
-  let gammaRedeemer: GammaRedeemerV1;
-  let resolver: GammaRedeemerResolver;
+  let autoGamma: AutoGamma;
+  let resolver: AutoGammaResolver;
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
 
@@ -94,13 +94,13 @@ describe("Gamma Redeemer Resolver", () => {
     ] = await setupGammaContracts();
 
     [automator, automatorTreasury] = await setupGelatoContracts();
-    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+    [autoGamma, resolver] = await setupAutoGammaContracts(
       deployer,
       UNISWAP_V2_ROUTER_02,
       automator.address,
       automatorTreasury.address
     );
-    await gammaRedeemer.startAutomator(resolver.address);
+    await autoGamma.startAutomator(resolver.address);
 
     usdc = await ethers.getContractAt("IERC20", USDC_ADDRESS);
 
@@ -178,10 +178,10 @@ describe("Gamma Redeemer Resolver", () => {
     await ethPut
       .connect(buyer)
       .approve(
-        gammaRedeemer.address,
+        autoGamma.address,
         parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
-    await controller.connect(seller).setOperator(gammaRedeemer.address, true);
+    await controller.connect(seller).setOperator(autoGamma.address, true);
   });
 
   describe("setMaxSlippage()", async () => {
@@ -203,8 +203,8 @@ describe("Gamma Redeemer Resolver", () => {
 
   describe("canProcessOrder()", async () => {
     it("should return false if otoken has not expired & not settled", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -214,65 +214,65 @@ describe("Gamma Redeemer Resolver", () => {
         );
 
       expect(
-        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+        await autoGamma.hasExpiredAndSettlementAllowed(ethPut.address)
       ).to.be.eq(false);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return false if vault is not valid", async () => {
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter.add(1), ZERO_ADDR);
 
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return false if redeemer is not operator", async () => {
-      await setOperator(seller, controller, gammaRedeemer.address, false);
+      await setOperator(seller, controller, autoGamma.address, false);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
-      expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(false);
+      expect(await autoGamma.isOperatorOf(sellerAddress)).to.be.eq(false);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return false if vault otoken has not expired & not settled", async () => {
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
-      const [vault] = await gammaRedeemer.getVaultWithDetails(
+      const [vault] = await autoGamma.getVaultWithDetails(
         sellerAddress,
         vaultCounter
       );
       expect(vault[0][0]).to.be.eq(ethPut.address);
       expect(
-        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+        await autoGamma.hasExpiredAndSettlementAllowed(ethPut.address)
       ).to.be.eq(false);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return false if swap pair is not allowed (buyer)", async () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await setUniPair(autoGamma, collateral, targetToken, true);
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -280,7 +280,7 @@ describe("Gamma Redeemer Resolver", () => {
           0,
           targetToken
         );
-      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+      await setUniPair(autoGamma, collateral, targetToken, false);
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
@@ -296,17 +296,17 @@ describe("Gamma Redeemer Resolver", () => {
     it("should return false if swap pair is not allowed (seller)", async () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await setUniPair(autoGamma, collateral, targetToken, true);
 
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter, targetToken);
-      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+      await setUniPair(autoGamma, collateral, targetToken, false);
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
@@ -321,8 +321,8 @@ describe("Gamma Redeemer Resolver", () => {
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return true if buy order could be processed", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -341,26 +341,26 @@ describe("Gamma Redeemer Resolver", () => {
       );
 
       expect(
-        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+        await autoGamma.hasExpiredAndSettlementAllowed(ethPut.address)
       ).to.be.eq(true);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(true);
     });
     it("should return true if sell order could be processed", async () => {
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
-      const [vault] = await gammaRedeemer.getVaultWithDetails(
+      const [vault] = await autoGamma.getVaultWithDetails(
         sellerAddress,
         vaultCounter
       );
       expect(vault[0][0]).to.be.eq(ethPut.address);
-      expect(await gammaRedeemer.isOperatorOf(sellerAddress)).to.be.eq(true);
+      expect(await autoGamma.isOperatorOf(sellerAddress)).to.be.eq(true);
 
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
@@ -373,7 +373,7 @@ describe("Gamma Redeemer Resolver", () => {
       );
 
       expect(
-        await gammaRedeemer.hasExpiredAndSettlementAllowed(ethPut.address)
+        await autoGamma.hasExpiredAndSettlementAllowed(ethPut.address)
       ).to.be.eq(true);
       expect(await resolver.canProcessOrder(orderId)).to.be.eq(true);
     });
@@ -381,10 +381,10 @@ describe("Gamma Redeemer Resolver", () => {
 
   describe("getOrderPayout()", async () => {
     it("should return correct buyer payout", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
+      const orderId = await autoGamma.getOrdersLength();
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
 
-      await gammaRedeemer
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
@@ -402,12 +402,12 @@ describe("Gamma Redeemer Resolver", () => {
       expect(payoutAmount).to.be.eq(payout);
     });
     it("should return correct seller payout", async () => {
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
       const vaultCounter = await controller.getAccountVaultCounter(
         sellerAddress
       );
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultCounter, ZERO_ADDR);
 
@@ -568,8 +568,8 @@ describe("Gamma Redeemer Resolver", () => {
 
   describe("getProcessableOrders()", async () => {
     it("should return empty list if no order is processable", async () => {
-      expect(await gammaRedeemer.getOrdersLength()).to.be.eq(0);
-      await gammaRedeemer
+      expect(await autoGamma.getOrdersLength()).to.be.eq(0);
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -579,15 +579,15 @@ describe("Gamma Redeemer Resolver", () => {
         );
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(false);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrders",
-        [[], []]
-      );
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [],
+        [],
+      ]);
       expect(execPayload).to.be.eq(taskData);
     });
     it("should skip finished orders", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -609,7 +609,7 @@ describe("Gamma Redeemer Resolver", () => {
       const [canExecBefore, execPayloadBefore] =
         await resolver.getProcessableOrders();
       expect(canExecBefore).to.be.eq(true);
-      const taskDataBefore = gammaRedeemer.interface.encodeFunctionData(
+      const taskDataBefore = autoGamma.interface.encodeFunctionData(
         "processOrders",
         [
           [orderId],
@@ -623,7 +623,7 @@ describe("Gamma Redeemer Resolver", () => {
       );
       expect(execPayloadBefore).to.be.eq(taskDataBefore);
 
-      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+      await autoGamma.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
       });
@@ -631,15 +631,15 @@ describe("Gamma Redeemer Resolver", () => {
       const [canExecAfter, execPayloadAfter] =
         await resolver.getProcessableOrders();
       expect(canExecAfter).to.be.eq(false);
-      const taskDataAfter = gammaRedeemer.interface.encodeFunctionData(
+      const taskDataAfter = autoGamma.interface.encodeFunctionData(
         "processOrders",
         [[], []]
       );
       expect(execPayloadAfter).to.be.eq(taskDataAfter);
     });
     it("should skip same order types", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -647,7 +647,7 @@ describe("Gamma Redeemer Resolver", () => {
           0,
           ZERO_ADDR
         );
-      await gammaRedeemer
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -655,7 +655,7 @@ describe("Gamma Redeemer Resolver", () => {
           0,
           ZERO_ADDR
         );
-      await gammaRedeemer
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -676,23 +676,20 @@ describe("Gamma Redeemer Resolver", () => {
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(true);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrders",
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [orderId],
         [
-          [orderId],
-          [
-            {
-              swapAmountOutMin: 0,
-              swapPath: [],
-            },
-          ],
-        ]
-      );
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+        ],
+      ]);
       expect(execPayload).to.be.eq(taskData);
     });
     it("should return list of processable orders", async () => {
-      const orderId1 = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId1 = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -700,7 +697,7 @@ describe("Gamma Redeemer Resolver", () => {
           0,
           ZERO_ADDR
         );
-      await gammaRedeemer
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -709,9 +706,9 @@ describe("Gamma Redeemer Resolver", () => {
           ZERO_ADDR
         );
 
-      const orderId3 = await gammaRedeemer.getOrdersLength();
+      const orderId3 = await autoGamma.getOrdersLength();
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
@@ -727,22 +724,19 @@ describe("Gamma Redeemer Resolver", () => {
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(true);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrders",
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [orderId1, orderId3],
         [
-          [orderId1, orderId3],
-          [
-            {
-              swapAmountOutMin: 0,
-              swapPath: [],
-            },
-            {
-              swapAmountOutMin: 0,
-              swapPath: [],
-            },
-          ],
-        ]
-      );
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+        ],
+      ]);
       expect(execPayload).to.be.eq(taskData);
     });
     it("should return list of processable orders (with toToken)", async () => {
@@ -753,17 +747,17 @@ describe("Gamma Redeemer Resolver", () => {
 
       const collateral = await ethPut.collateralAsset();
       const targetToken = WETH_ADDRESS;
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
+      await setUniPair(autoGamma, collateral, targetToken, true);
 
-      const orderId1 = await gammaRedeemer.getOrdersLength();
+      const orderId1 = await autoGamma.getOrdersLength();
       const order1Amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      await gammaRedeemer
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, order1Amount, 0, targetToken);
 
-      const orderId2 = await gammaRedeemer.getOrdersLength();
+      const orderId2 = await autoGamma.getOrdersLength();
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
-      await gammaRedeemer
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, targetToken);
 
@@ -784,7 +778,7 @@ describe("Gamma Redeemer Resolver", () => {
         ethPut.address,
         order1Amount
       );
-      const [, , , , , , order1Fee, ,] = await gammaRedeemer.orders(orderId1);
+      const [, , , , , , order1Fee, ,] = await autoGamma.orders(orderId1);
       const order1FeeTotal = order1Fee.mul(order1Payout).div(10000);
       order1Payout = order1Payout.sub(order1FeeTotal);
       const order1Amounts = await uniRouter.getAmountsOut(order1Payout, path);
@@ -794,7 +788,7 @@ describe("Gamma Redeemer Resolver", () => {
       );
 
       let order2Payout = await controller.getProceed(sellerAddress, vaultId);
-      const [, , , , , , order2Fee, ,] = await gammaRedeemer.orders(orderId2);
+      const [, , , , , , order2Fee, ,] = await autoGamma.orders(orderId2);
       const order2FeeTotal = order2Fee.mul(order2Payout).div(10000);
       order2Payout = order2Payout.sub(order2FeeTotal);
       let order2Amounts = await uniRouter.getAmountsOut(order2Payout, path);
@@ -805,22 +799,19 @@ describe("Gamma Redeemer Resolver", () => {
 
       const [canExec, execPayload] = await resolver.getProcessableOrders();
       expect(canExec).to.be.eq(true);
-      const taskData = gammaRedeemer.interface.encodeFunctionData(
-        "processOrders",
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [orderId1, orderId2],
         [
-          [orderId1, orderId2],
-          [
-            {
-              swapAmountOutMin: order1AmountOutMin,
-              swapPath: path,
-            },
-            {
-              swapAmountOutMin: order2AmountOutMin,
-              swapPath: path,
-            },
-          ],
-        ]
-      );
+          {
+            swapAmountOutMin: order1AmountOutMin,
+            swapPath: path,
+          },
+          {
+            swapAmountOutMin: order2AmountOutMin,
+            swapPath: path,
+          },
+        ],
+      ]);
       expect(execPayload).to.be.eq(taskData);
     });
   });

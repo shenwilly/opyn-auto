@@ -8,8 +8,8 @@ import {
   Otoken,
   MarginPool,
   MarginCalculator,
-  GammaRedeemerV1,
-  GammaRedeemerResolver,
+  AutoGamma,
+  AutoGammaResolver,
   TaskTreasury,
   Oracle,
   PokeMe,
@@ -51,7 +51,7 @@ const { time, expectRevert } = require("@openzeppelin/test-helpers");
 const { expect } = chai;
 const ZERO_ADDR = constants.AddressZero;
 
-describe("GammaRedeemer", () => {
+describe("AutoGamma", () => {
   let deployer: SignerWithAddress;
   let buyer: SignerWithAddress;
   let seller: SignerWithAddress;
@@ -66,8 +66,8 @@ describe("GammaRedeemer", () => {
   let calculator: MarginCalculator;
   let oracle: Oracle;
   let controller: Controller;
-  let gammaRedeemer: GammaRedeemerV1;
-  let resolver: GammaRedeemerResolver;
+  let autoGamma: AutoGamma;
+  let resolver: AutoGammaResolver;
   let automator: PokeMe;
   let automatorTreasury: TaskTreasury;
   let uniRouter: Contract;
@@ -103,7 +103,7 @@ describe("GammaRedeemer", () => {
     ] = await setupGammaContracts();
 
     [automator, automatorTreasury] = await setupGelatoContracts();
-    [gammaRedeemer, resolver] = await setupAutoGammaContracts(
+    [autoGamma, resolver] = await setupAutoGammaContracts(
       deployer,
       UNISWAP_V2_ROUTER_02,
       automator.address,
@@ -181,11 +181,11 @@ describe("GammaRedeemer", () => {
     await ethPut
       .connect(buyer)
       .approve(
-        gammaRedeemer.address,
+        autoGamma.address,
         parseUnits(optionAmount.toString(), OTOKEN_DECIMALS)
       );
-    await controller.connect(seller).setOperator(gammaRedeemer.address, true);
-    await gammaRedeemer.connect(deployer).startAutomator(resolver.address);
+    await controller.connect(seller).setOperator(autoGamma.address, true);
+    await autoGamma.connect(deployer).startAutomator(resolver.address);
 
     snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
@@ -198,7 +198,7 @@ describe("GammaRedeemer", () => {
   describe("createOrder()", async () => {
     it("should revert if otoken is not whitelisted", async () => {
       await expectRevert(
-        gammaRedeemer
+        autoGamma
           .connect(buyer)
           .createOrder(
             buyerAddress,
@@ -206,19 +206,19 @@ describe("GammaRedeemer", () => {
             0,
             ZERO_ADDR
           ),
-        "GammaRedeemer::createOrder: Otoken not whitelisted"
+        "AutoGamma::createOrder: Otoken not whitelisted"
       );
     });
     it("should revert if otoken amount is 0 and otoken is address(0)", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).createOrder(ZERO_ADDR, 1, 1, ZERO_ADDR),
-        "GammaRedeemer::createOrder: Amount must be 0 when creating settlement order"
+        autoGamma.connect(buyer).createOrder(ZERO_ADDR, 1, 1, ZERO_ADDR),
+        "AutoGamma::createOrder: Amount must be 0 when creating settlement order"
       );
     });
     it("should revert if settlement token pair is same", async () => {
       const collateralToken = await ethPut.collateralAsset();
       await expectRevert(
-        gammaRedeemer
+        autoGamma
           .connect(buyer)
           .createOrder(
             ethPut.address,
@@ -226,17 +226,15 @@ describe("GammaRedeemer", () => {
             0,
             collateralToken
           ),
-        "GammaRedeemer::createOrder: same settlement token and collateral"
+        "AutoGamma::createOrder: same settlement token and collateral"
       );
     });
     it("should revert if settlement token pair is not allowed", async () => {
       const collateral = await ethPut.collateralAsset();
       expect(collateral).to.be.not.eq(WETH_ADDRESS);
-      expect(await gammaRedeemer.uniPair(collateral, WETH_ADDRESS)).to.be.eq(
-        false
-      );
+      expect(await autoGamma.uniPair(collateral, WETH_ADDRESS)).to.be.eq(false);
       await expectRevert(
-        gammaRedeemer
+        autoGamma
           .connect(buyer)
           .createOrder(
             ethPut.address,
@@ -244,12 +242,12 @@ describe("GammaRedeemer", () => {
             0,
             WETH_ADDRESS
           ),
-        "GammaRedeemer::createOrder: settlement token not allowed"
+        "AutoGamma::createOrder: settlement token not allowed"
       );
     });
     it("should create buyer order", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      const tx = await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      const tx = await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -272,7 +270,7 @@ describe("GammaRedeemer", () => {
         orderToToken,
         orderFee,
         orderFinished,
-      ] = await gammaRedeemer.orders(orderId);
+      ] = await autoGamma.orders(orderId);
       expect(orderOwner).to.be.eq(buyerAddress);
       expect(orderOtoken).to.be.eq(ethPut.address);
       expect(orderAmount).to.be.eq(
@@ -281,14 +279,14 @@ describe("GammaRedeemer", () => {
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
       expect(orderToToken).to.be.eq(ZERO_ADDR);
-      expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
+      expect(await autoGamma.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
     it("should create buyer order (with toToken)", async () => {
       const collateral = await ethPut.collateralAsset();
-      await gammaRedeemer.allowPair(collateral, WETH_ADDRESS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      const tx = await gammaRedeemer
+      await autoGamma.allowPair(collateral, WETH_ADDRESS);
+      const orderId = await autoGamma.getOrdersLength();
+      const tx = await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -311,7 +309,7 @@ describe("GammaRedeemer", () => {
         orderToToken,
         orderFee,
         orderFinished,
-      ] = await gammaRedeemer.orders(orderId);
+      ] = await autoGamma.orders(orderId);
       expect(orderOwner).to.be.eq(buyerAddress);
       expect(orderOtoken).to.be.eq(ethPut.address);
       expect(orderAmount).to.be.eq(
@@ -320,12 +318,12 @@ describe("GammaRedeemer", () => {
       // expect(orderVaultId).to.be.eq(0);
       expect(orderIsSeller).to.be.eq(false);
       expect(orderToToken).to.be.eq(WETH_ADDRESS);
-      expect(await gammaRedeemer.redeemFee()).to.be.eq(orderFee);
+      expect(await autoGamma.redeemFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
     it("should create seller order", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      const tx = await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      const tx = await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
       const receipt = await tx.wait();
@@ -343,21 +341,21 @@ describe("GammaRedeemer", () => {
         orderToToken,
         orderFee,
         orderFinished,
-      ] = await gammaRedeemer.orders(orderId);
+      ] = await autoGamma.orders(orderId);
       expect(orderOwner).to.be.eq(sellerAddress);
       expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
       expect(orderVaultId).to.be.eq(vaultId);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToToken).to.be.eq(ZERO_ADDR);
-      expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
+      expect(await autoGamma.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
     it("should create seller order (with toToken)", async () => {
       const collateral = await ethPut.collateralAsset();
-      await gammaRedeemer.allowPair(collateral, WETH_ADDRESS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      const tx = await gammaRedeemer
+      await autoGamma.allowPair(collateral, WETH_ADDRESS);
+      const orderId = await autoGamma.getOrdersLength();
+      const tx = await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, WETH_ADDRESS);
       const receipt = await tx.wait();
@@ -375,14 +373,14 @@ describe("GammaRedeemer", () => {
         orderToToken,
         orderFee,
         orderFinished,
-      ] = await gammaRedeemer.orders(orderId);
+      ] = await autoGamma.orders(orderId);
       expect(orderOwner).to.be.eq(sellerAddress);
       expect(orderOtoken).to.be.eq(ZERO_ADDR);
       expect(orderAmount).to.be.eq(0);
       expect(orderVaultId).to.be.eq(vaultId);
       expect(orderIsSeller).to.be.eq(true);
       expect(orderToToken).to.be.eq(WETH_ADDRESS);
-      expect(await gammaRedeemer.settleFee()).to.be.eq(orderFee);
+      expect(await autoGamma.settleFee()).to.be.eq(orderFee);
       expect(orderFinished).to.be.eq(false);
     });
   });
@@ -391,38 +389,32 @@ describe("GammaRedeemer", () => {
     let orderId: BigNumber;
 
     beforeEach(async () => {
-      orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
+      orderId = await autoGamma.getOrdersLength();
+      await autoGamma.connect(seller).createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
     });
 
     it("should revert if sender is not owner", async () => {
-      orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
+      orderId = await autoGamma.getOrdersLength();
+      await autoGamma.connect(seller).createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
 
       await expectRevert(
-        gammaRedeemer.connect(buyer).cancelOrder(orderId),
-        "GammaRedeemer::cancelOrder: Sender is not order owner"
+        autoGamma.connect(buyer).cancelOrder(orderId),
+        "AutoGamma::cancelOrder: Sender is not order owner"
       );
     });
     it("should revert if order is already finished", async () => {
-      await gammaRedeemer.connect(seller).cancelOrder(orderId);
+      await autoGamma.connect(seller).cancelOrder(orderId);
 
       await expectRevert(
-        gammaRedeemer.connect(seller).cancelOrder(orderId),
-        "GammaRedeemer::cancelOrder: Order is already finished"
+        autoGamma.connect(seller).cancelOrder(orderId),
+        "AutoGamma::cancelOrder: Order is already finished"
       );
     });
     it("should cancel order", async () => {
-      const newOrderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
-        .connect(seller)
-        .createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
+      const newOrderId = await autoGamma.getOrdersLength();
+      await autoGamma.connect(seller).createOrder(ZERO_ADDR, 0, 10, ZERO_ADDR);
 
-      const tx = await gammaRedeemer.connect(seller).cancelOrder(newOrderId);
+      const tx = await autoGamma.connect(seller).cancelOrder(newOrderId);
       const receipt = await tx.wait();
       const event = receipt.events!.filter(
         (event) => event.event == "OrderFinished"
@@ -447,54 +439,50 @@ describe("GammaRedeemer", () => {
     });
 
     it("should return false if isSeller is false and shouldRedeemOtoken is false", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
+      await ethPut.connect(buyer).approve(autoGamma.address, 0);
       expect(
-        await gammaRedeemer.shouldRedeemOtoken(
-          buyerAddress,
-          ethPut.address,
-          amount
-        )
+        await autoGamma.shouldRedeemOtoken(buyerAddress, ethPut.address, amount)
       ).to.be.eq(false);
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+      expect(await autoGamma.shouldProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return false if isSeller is true and shouldSettleVault is false", async () => {
       const vaultId = (
         await controller.getAccountVaultCounter(sellerAddress)
       ).add(2); // non existent vau;t
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ethPut.address, 0, vaultId, ZERO_ADDR);
 
       expect(
-        await gammaRedeemer.shouldSettleVault(sellerAddress, vaultId)
+        await autoGamma.shouldSettleVault(sellerAddress, vaultId)
       ).to.be.eq(false);
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(false);
+      expect(await autoGamma.shouldProcessOrder(orderId)).to.be.eq(false);
     });
     it("should return true for buyer", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
+      expect(await autoGamma.shouldProcessOrder(orderId)).to.be.eq(true);
     });
     it("should return true for seller", async () => {
       const vaultId = await controller.getAccountVaultCounter(sellerAddress);
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
-      expect(await gammaRedeemer.shouldProcessOrder(orderId)).to.be.eq(true);
+      expect(await autoGamma.shouldProcessOrder(orderId)).to.be.eq(true);
     });
   });
 
@@ -512,23 +500,23 @@ describe("GammaRedeemer", () => {
     });
 
     it("should revert if order is already finished", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ethPut.address, 0, 1, ZERO_ADDR);
-      await gammaRedeemer.connect(seller).cancelOrder(orderId);
+      await autoGamma.connect(seller).cancelOrder(orderId);
 
       await expectRevert(
-        gammaRedeemer.processOrder(orderId, {
+        autoGamma.processOrder(orderId, {
           swapAmountOutMin: 0,
           swapPath: [],
         }),
-        "GammaRedeemer::processOrder: Order should not be processed"
+        "AutoGamma::processOrder: Order should not be processed"
       );
     });
     it("should revert if shouldProcessOrder is false", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(
           ethPut.address,
@@ -537,78 +525,78 @@ describe("GammaRedeemer", () => {
           ZERO_ADDR
         );
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, 0);
+      await ethPut.connect(buyer).approve(autoGamma.address, 0);
       await expectRevert(
-        gammaRedeemer.processOrder(orderId, {
+        autoGamma.processOrder(orderId, {
           swapAmountOutMin: 0,
           swapPath: [],
         }),
-        "GammaRedeemer::processOrder: Order should not be processed"
+        "AutoGamma::processOrder: Order should not be processed"
       );
     });
     it("should revert if path swap is invalid", async () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
-      await gammaRedeemer.setRedeemFee(0);
+      await setUniPair(autoGamma, collateral, targetToken, true);
+      await autoGamma.setRedeemFee(0);
 
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, targetToken);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
 
       const payout = await controller.getPayout(ethPut.address, amount);
       const path = [collateral, targetToken];
       const amounts = await uniRouter.getAmountsOut(payout, path);
 
       await expectRevert(
-        gammaRedeemer.connect(deployer).processOrder(orderId, {
+        autoGamma.connect(deployer).processOrder(orderId, {
           swapAmountOutMin: amounts[1],
           swapPath: [targetToken, collateral],
         }),
-        "GammaRedeemer::processOrder: Invalid swap path"
+        "AutoGamma::processOrder: Invalid swap path"
       );
     });
     it("should revert if pair is not allowed", async () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
-      await gammaRedeemer.setRedeemFee(0);
+      await setUniPair(autoGamma, collateral, targetToken, true);
+      await autoGamma.setRedeemFee(0);
 
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, targetToken);
-      await setUniPair(gammaRedeemer, collateral, targetToken, false);
+      await setUniPair(autoGamma, collateral, targetToken, false);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
 
       const payout = await controller.getPayout(ethPut.address, amount);
       const path = [collateral, targetToken];
       const amounts = await uniRouter.getAmountsOut(payout, path);
 
       await expectRevert(
-        gammaRedeemer.connect(deployer).processOrder(orderId, {
+        autoGamma.connect(deployer).processOrder(orderId, {
           swapAmountOutMin: amounts[1],
           swapPath: path,
         }),
-        "GammaRedeemer::processOrder: token pair not allowed"
+        "AutoGamma::processOrder: token pair not allowed"
       );
     });
     it("should redeemOtoken if isSeller is false", async () => {
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
       const balanceBefore = await usdc.balanceOf(buyerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+      await autoGamma.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
       });
@@ -619,23 +607,23 @@ describe("GammaRedeemer", () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
       const token = await ethers.getContractAt("IERC20", targetToken);
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
-      await gammaRedeemer.setRedeemFee(0);
+      await setUniPair(autoGamma, collateral, targetToken, true);
+      await autoGamma.setRedeemFee(0);
 
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, targetToken);
 
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
 
       const payout = await controller.getPayout(ethPut.address, amount);
       const path = [collateral, targetToken];
       const amounts = await uniRouter.getAmountsOut(payout, path);
 
       const balanceBefore = await token.balanceOf(buyerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+      await autoGamma.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: amounts[1],
         swapPath: path,
       });
@@ -643,15 +631,15 @@ describe("GammaRedeemer", () => {
       expect(balanceAfter.sub(balanceBefore)).to.be.eq(amounts[1]);
     });
     it("should settleVault if isSeller is true", async () => {
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
 
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
 
       const balanceBefore = await usdc.balanceOf(sellerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+      await autoGamma.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: 0,
         swapPath: [],
       });
@@ -662,22 +650,22 @@ describe("GammaRedeemer", () => {
       const collateral = await ethPut.collateralAsset(); // USDC
       const targetToken = WETH_ADDRESS;
       const token = await ethers.getContractAt("IERC20", targetToken);
-      await setUniPair(gammaRedeemer, collateral, targetToken, true);
-      await gammaRedeemer.setSettleFee(0);
+      await setUniPair(autoGamma, collateral, targetToken, true);
+      await autoGamma.setSettleFee(0);
 
-      const orderId = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, targetToken);
 
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
 
       const proceed = await controller.getProceed(sellerAddress, vaultId);
       const path = [collateral, targetToken];
       const amounts = await uniRouter.getAmountsOut(proceed, path);
 
       const balanceBefore = await token.balanceOf(sellerAddress);
-      await gammaRedeemer.connect(deployer).processOrder(orderId, {
+      await autoGamma.connect(deployer).processOrder(orderId, {
         swapAmountOutMin: amounts[1],
         swapPath: path,
       });
@@ -701,27 +689,27 @@ describe("GammaRedeemer", () => {
 
     it("should revert if params length not equal", async () => {
       await expectRevert(
-        gammaRedeemer.connect(deployer).processOrders([1], []),
-        "GammaRedeemer::processOrders: Params lengths must be same"
+        autoGamma.connect(deployer).processOrders([1], []),
+        "AutoGamma::processOrders: Params lengths must be same"
       );
     });
     it("should process orders", async () => {
       const amount = parseUnits(optionAmount.toString(), OTOKEN_DECIMALS);
-      const orderId1 = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId1 = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(buyer)
         .createOrder(ethPut.address, amount, 0, ZERO_ADDR);
-      await ethPut.connect(buyer).approve(gammaRedeemer.address, amount);
+      await ethPut.connect(buyer).approve(autoGamma.address, amount);
 
-      const orderId2 = await gammaRedeemer.getOrdersLength();
-      await gammaRedeemer
+      const orderId2 = await autoGamma.getOrdersLength();
+      await autoGamma
         .connect(seller)
         .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
-      await setOperator(seller, controller, gammaRedeemer.address, true);
+      await setOperator(seller, controller, autoGamma.address, true);
 
       const balanceBefore1 = await usdc.balanceOf(buyerAddress);
       const balanceBefore2 = await usdc.balanceOf(sellerAddress);
-      await gammaRedeemer.connect(deployer).processOrders(
+      await autoGamma.connect(deployer).processOrders(
         [orderId1, orderId2],
         [
           {
@@ -745,7 +733,7 @@ describe("GammaRedeemer", () => {
     const amount = parseEther("1");
     beforeEach(async () => {
       await automatorTreasury.depositFunds(
-        gammaRedeemer.address,
+        autoGamma.address,
         ETH_TOKEN_ADDRESS,
         0,
         {
@@ -756,19 +744,17 @@ describe("GammaRedeemer", () => {
 
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).withdrawFund(ETH_TOKEN_ADDRESS, amount),
+        autoGamma.connect(buyer).withdrawFund(ETH_TOKEN_ADDRESS, amount),
         "Ownable: caller is not the owner'"
       );
     });
     it("should withdraw funds from treasury", async () => {
       const ethBalanceBefore = await ethers.provider.getBalance(
-        gammaRedeemer.address
+        autoGamma.address
       );
-      await gammaRedeemer
-        .connect(deployer)
-        .withdrawFund(ETH_TOKEN_ADDRESS, amount);
+      await autoGamma.connect(deployer).withdrawFund(ETH_TOKEN_ADDRESS, amount);
       const ethBalanceAfter = await ethers.provider.getBalance(
-        gammaRedeemer.address
+        autoGamma.address
       );
 
       expect(ethBalanceAfter.sub(ethBalanceBefore)).to.be.eq(amount);
@@ -778,108 +764,104 @@ describe("GammaRedeemer", () => {
   describe("setAutomator()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).setAutomator(deployerAddress),
+        autoGamma.connect(buyer).setAutomator(deployerAddress),
         "Ownable: caller is not the owner'"
       );
     });
     it("should set new automator", async () => {
-      const oldAddress = await gammaRedeemer.automator();
+      const oldAddress = await autoGamma.automator();
       const newAddress = buyerAddress;
       expect(oldAddress).to.not.be.eq(newAddress);
-      await gammaRedeemer.connect(deployer).setAutomator(newAddress);
-      expect(await gammaRedeemer.automator()).to.be.eq(newAddress);
+      await autoGamma.connect(deployer).setAutomator(newAddress);
+      expect(await autoGamma.automator()).to.be.eq(newAddress);
     });
   });
 
   describe("setAutomatorTreasury()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).setAutomatorTreasury(deployerAddress),
+        autoGamma.connect(buyer).setAutomatorTreasury(deployerAddress),
         "Ownable: caller is not the owner'"
       );
     });
     it("should set new automator treasury", async () => {
-      const oldAddress = await gammaRedeemer.automatorTreasury();
+      const oldAddress = await autoGamma.automatorTreasury();
       const newAddress = buyerAddress;
       expect(oldAddress).to.not.be.eq(newAddress);
-      await gammaRedeemer.connect(deployer).setAutomatorTreasury(newAddress);
-      expect(await gammaRedeemer.automatorTreasury()).to.be.eq(newAddress);
+      await autoGamma.connect(deployer).setAutomatorTreasury(newAddress);
+      expect(await autoGamma.automatorTreasury()).to.be.eq(newAddress);
     });
   });
 
   describe("setRedeemFee()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).setRedeemFee(1),
+        autoGamma.connect(buyer).setRedeemFee(1),
         "Ownable: caller is not the owner'"
       );
     });
     it("should set new automator treasury", async () => {
-      const oldFee = await gammaRedeemer.redeemFee();
+      const oldFee = await autoGamma.redeemFee();
       const newFee = oldFee.add(1);
-      await gammaRedeemer.connect(deployer).setRedeemFee(newFee);
-      expect(await gammaRedeemer.redeemFee()).to.be.eq(newFee);
+      await autoGamma.connect(deployer).setRedeemFee(newFee);
+      expect(await autoGamma.redeemFee()).to.be.eq(newFee);
     });
   });
 
   describe("setSettleFee()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).setSettleFee(1),
+        autoGamma.connect(buyer).setSettleFee(1),
         "Ownable: caller is not the owner'"
       );
     });
     it("should set new automator treasury", async () => {
-      const oldFee = await gammaRedeemer.settleFee();
+      const oldFee = await autoGamma.settleFee();
       const newFee = oldFee.add(1);
-      await gammaRedeemer.connect(deployer).setSettleFee(newFee);
-      expect(await gammaRedeemer.settleFee()).to.be.eq(newFee);
+      await autoGamma.connect(deployer).setSettleFee(newFee);
+      expect(await autoGamma.settleFee()).to.be.eq(newFee);
     });
   });
 
   describe("setUniRouter()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).setUniRouter(deployerAddress),
+        autoGamma.connect(buyer).setUniRouter(deployerAddress),
         "Ownable: caller is not the owner'"
       );
     });
     it("should set new automator treasury", async () => {
-      const oldRouter = await gammaRedeemer.uniRouter();
+      const oldRouter = await autoGamma.uniRouter();
       const newRouter = deployerAddress;
       expect(oldRouter).to.be.not.eq(newRouter);
-      await gammaRedeemer.connect(deployer).setUniRouter(deployerAddress);
-      expect(await gammaRedeemer.uniRouter()).to.be.eq(newRouter);
+      await autoGamma.connect(deployer).setUniRouter(deployerAddress);
+      expect(await autoGamma.uniRouter()).to.be.eq(newRouter);
     });
   });
 
   describe("allowPair()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
+        autoGamma.connect(buyer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
         "Ownable: caller is not the owner'"
       );
     });
     it("should revert if pair is already allowed", async () => {
-      await gammaRedeemer
-        .connect(deployer)
-        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      await autoGamma.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS);
       await expectRevert(
-        gammaRedeemer.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
-        "GammaRedeemer::allowPair: already allowed"
+        autoGamma.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "AutoGamma::allowPair: already allowed"
       );
     });
     it("should set pair to true", async () => {
-      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+      expect(await autoGamma.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
         false
       );
-      await gammaRedeemer
-        .connect(deployer)
-        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
-      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+      await autoGamma.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      expect(await autoGamma.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
         true
       );
-      expect(await gammaRedeemer.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
+      expect(await autoGamma.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
         true
       );
     });
@@ -888,35 +870,31 @@ describe("GammaRedeemer", () => {
   describe("disallowPair()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).disallowPair(USDC_ADDRESS, WETH_ADDRESS),
+        autoGamma.connect(buyer).disallowPair(USDC_ADDRESS, WETH_ADDRESS),
         "Ownable: caller is not the owner'"
       );
     });
     it("should revert if pair is already disallowed", async () => {
-      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+      expect(await autoGamma.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
         false
       );
       await expectRevert(
-        gammaRedeemer
-          .connect(deployer)
-          .disallowPair(USDC_ADDRESS, WETH_ADDRESS),
-        "GammaRedeemer::allowPair: already disallowed"
+        autoGamma.connect(deployer).disallowPair(USDC_ADDRESS, WETH_ADDRESS),
+        "AutoGamma::allowPair: already disallowed"
       );
     });
     it("should set pair to true", async () => {
-      await gammaRedeemer
-        .connect(deployer)
-        .allowPair(USDC_ADDRESS, WETH_ADDRESS);
-      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+      await autoGamma.connect(deployer).allowPair(USDC_ADDRESS, WETH_ADDRESS);
+      expect(await autoGamma.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
         true
       );
-      await gammaRedeemer
+      await autoGamma
         .connect(deployer)
         .disallowPair(USDC_ADDRESS, WETH_ADDRESS);
-      expect(await gammaRedeemer.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
+      expect(await autoGamma.uniPair(USDC_ADDRESS, WETH_ADDRESS)).to.be.eq(
         false
       );
-      expect(await gammaRedeemer.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
+      expect(await autoGamma.uniPair(WETH_ADDRESS, USDC_ADDRESS)).to.be.eq(
         false
       );
     });
@@ -959,44 +937,44 @@ describe("GammaRedeemer", () => {
   describe("startAutomator()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).startAutomator(deployerAddress),
+        autoGamma.connect(buyer).startAutomator(deployerAddress),
         "Ownable: caller is not the owner'"
       );
     });
     it("should revert if already started", async () => {
-      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
+      expect(await autoGamma.isAutomatorEnabled()).to.be.eq(true);
       await expectRevert(
-        gammaRedeemer.connect(deployer).startAutomator(deployerAddress),
-        "GammaRedeemer::startAutomator: already started"
+        autoGamma.connect(deployer).startAutomator(deployerAddress),
+        "AutoGamma::startAutomator: already started"
       );
     });
     it("should start automator", async () => {
-      await gammaRedeemer.connect(deployer).stopAutomator();
-      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(false);
+      await autoGamma.connect(deployer).stopAutomator();
+      expect(await autoGamma.isAutomatorEnabled()).to.be.eq(false);
 
-      await gammaRedeemer.startAutomator(deployerAddress);
-      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
+      await autoGamma.startAutomator(deployerAddress);
+      expect(await autoGamma.isAutomatorEnabled()).to.be.eq(true);
     });
   });
 
   describe("stopAutomator()", async () => {
     it("should revert if sender is not owner", async () => {
       await expectRevert(
-        gammaRedeemer.connect(buyer).startAutomator(deployerAddress),
+        autoGamma.connect(buyer).startAutomator(deployerAddress),
         "Ownable: caller is not the owner'"
       );
     });
     it("should revert if already stopped", async () => {
-      await gammaRedeemer.connect(deployer).stopAutomator();
+      await autoGamma.connect(deployer).stopAutomator();
       await expectRevert(
-        gammaRedeemer.connect(deployer).stopAutomator(),
-        "GammaRedeemer::stopAutomator: already stopped"
+        autoGamma.connect(deployer).stopAutomator(),
+        "AutoGamma::stopAutomator: already stopped"
       );
     });
     it("should stop automator", async () => {
-      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(true);
-      await gammaRedeemer.connect(deployer).stopAutomator();
-      expect(await gammaRedeemer.isAutomatorEnabled()).to.be.eq(false);
+      expect(await autoGamma.isAutomatorEnabled()).to.be.eq(true);
+      await autoGamma.connect(deployer).stopAutomator();
+      expect(await autoGamma.isAutomatorEnabled()).to.be.eq(false);
     });
   });
 });
