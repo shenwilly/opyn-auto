@@ -1,14 +1,14 @@
 {
-  "name": "solidity-ts-dev-stack-example",
-  "version": "0.0.2",
-  "description": "",
+  "name": "opyn-auto-gamma",
+  "version": "1.1.0",
+  "description": "Smart contracts for automating Opyn Gamma redemption & settlement",
   "main": "index.js",
   "scripts": {
     "build": "npm run clean && npm run compile",
     "clean": "npx hardhat clean",
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
-    "coverage": "npm run build && npx hardhat coverage --temp artifacts --network coverage",
+    "coverage": "npm run build && npx hardhat coverage --temp artifacts",
     "verify": "npx hardhat verify",
     "lint:sol": "solhint -f table contracts/**/*.sol",
     "lint:tests": "eslint 'test/**/*.ts'",

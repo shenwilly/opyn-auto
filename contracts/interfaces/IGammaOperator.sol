@@ -14,9 +14,14 @@ interface IGammaOperator {
         uint256 _typeVault
     ) external view returns (uint256, bool);
 
-    function getVaultOtoken(MarginVault.Vault memory _vault)
+    function getVaultOtokenByVault(MarginVault.Vault memory _vault)
         external
         pure
+        returns (address);
+
+    function getVaultOtoken(address _owner, uint256 _vaultId)
+        external
+        view
         returns (address);
 
     function getVaultWithDetails(address _owner, uint256 _vaultId)
@@ -27,6 +32,22 @@ interface IGammaOperator {
             uint256,
             uint256
         );
+
+    function getOtokenCollateral(address _otoken)
+        external
+        pure
+        returns (address);
+
+    function getRedeemPayout(address _otoken, uint256 _amount)
+        external
+        view
+        returns (uint256);
+
+    function getRedeemableAmount(
+        address _owner,
+        address _otoken,
+        uint256 _amount
+    ) external view returns (uint256);
 
     function isSettlementAllowed(address _otoken) external view returns (bool);
 

@@ -54,6 +54,7 @@ const config: HardhatUserConfig = {
         url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
         blockNumber: 12984971,
       },
+      hardfork: "berlin"
     },
     localhost: {
       allowUnlimitedContractSize: true
@@ -69,9 +70,6 @@ const config: HardhatUserConfig = {
     ropsten: {
       url: `https://ropsten.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [ROPSTEN_PRIVATE_KEY],
-    },
-    coverage: {
-      url: "http://127.0.0.1:8555", // Coverage launches its own ganache-cli client
     },
   },
   etherscan: {

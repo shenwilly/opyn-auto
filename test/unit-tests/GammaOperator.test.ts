@@ -40,6 +40,7 @@ import {
   STRIKE_PRICE_DECIMALS,
   USDC_DECIMALS,
 } from "../../constants/decimals";
+import { impersonateAccount } from "../helpers/utils/misc";
 
 const { expect } = chai;
 const { time, expectRevert } = require("@openzeppelin/test-helpers");
@@ -185,7 +186,7 @@ describe("GammaOperator", () => {
 
       await gammaOperator
         .connect(buyer)
-        .redeem(buyerAddress, ethPut.address, shortOptionAmount, 0);
+        .redeem(buyerAddress, ethPut.address, shortOptionAmount);
 
       const usdcBalanceAfter = await usdc.balanceOf(buyerAddress);
       const optionBalanceAfter = await ethPut.balanceOf(buyerAddress);
@@ -193,67 +194,6 @@ describe("GammaOperator", () => {
       expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
       const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
       expect(difference).to.be.eq(payout);
-
-      expect(optionBalanceBefore).to.be.gt(0);
-      expect(optionBalanceAfter).to.be.eq(0);
-    });
-    it("should redeem otoken with fee correctly", async () => {
-      let fee = 50;
-
-      let shortOptionAmount = parseUnits("1", OTOKEN_DECIMALS);
-
-      const vaultId = (
-        await controller.getAccountVaultCounter(sellerAddress)
-      ).add(1);
-      const actionArgs = [
-        getActionOpenVault(sellerAddress, vaultId.toString()),
-        getActionDepositCollateral(
-          sellerAddress,
-          vaultId.toString(),
-          USDC_ADDRESS,
-          collateralAmount
-        ),
-        getActionMintShort(
-          sellerAddress,
-          vaultId.toString(),
-          ethPut.address,
-          shortOptionAmount
-        ),
-      ];
-      await controller.connect(seller).operate(actionArgs);
-      await ethPut.connect(seller).transfer(buyerAddress, shortOptionAmount);
-      await ethPut
-        .connect(buyer)
-        .approve(gammaOperator.address, shortOptionAmount);
-
-      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
-      await ethers.provider.send("evm_mine", []);
-
-      await setExpiryPriceAndEndDisputePeriod(
-        oracle,
-        WETH_ADDRESS,
-        expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
-      );
-
-      const usdcBalanceBefore = await usdc.balanceOf(buyerAddress);
-      const optionBalanceBefore = await ethPut.balanceOf(buyerAddress);
-      const payout = await controller.getPayout(
-        ethPut.address,
-        shortOptionAmount
-      );
-      const payoutMinusFee = payout.sub(payout.mul(fee).div(10000));
-
-      await gammaOperator
-        .connect(buyer)
-        .redeem(buyerAddress, ethPut.address, shortOptionAmount, fee);
-
-      const usdcBalanceAfter = await usdc.balanceOf(buyerAddress);
-      const optionBalanceAfter = await ethPut.balanceOf(buyerAddress);
-
-      expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
-      const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
-      expect(difference).to.be.eq(payoutMinusFee);
 
       expect(optionBalanceBefore).to.be.gt(0);
       expect(optionBalanceAfter).to.be.eq(0);
@@ -298,60 +238,13 @@ describe("GammaOperator", () => {
       const usdcBalanceBefore = await usdc.balanceOf(sellerAddress);
       const proceed = await controller.getProceed(sellerAddress, vaultId);
 
-      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId, 0);
+      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId);
 
       const usdcBalanceAfter = await usdc.balanceOf(sellerAddress);
 
       expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
       const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
       expect(difference).to.be.eq(proceed);
-    });
-    it("should settle vault with fee correctly", async () => {
-      let fee = 10;
-      let shortOptionAmount = parseUnits("1", OTOKEN_DECIMALS);
-
-      const vaultId = (
-        await controller.getAccountVaultCounter(sellerAddress)
-      ).add(1);
-      const actionArgs = [
-        getActionOpenVault(sellerAddress, vaultId.toString()),
-        getActionDepositCollateral(
-          sellerAddress,
-          vaultId.toString(),
-          USDC_ADDRESS,
-          collateralAmount
-        ),
-        getActionMintShort(
-          sellerAddress,
-          vaultId.toString(),
-          ethPut.address,
-          shortOptionAmount
-        ),
-      ];
-      await controller.connect(seller).operate(actionArgs);
-      await setOperator(seller, controller, gammaOperator.address, true);
-
-      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
-      await ethers.provider.send("evm_mine", []);
-
-      await setExpiryPriceAndEndDisputePeriod(
-        oracle,
-        WETH_ADDRESS,
-        expiry,
-        parseUnits(((strikePrice * 98) / 100).toString(), STRIKE_PRICE_DECIMALS)
-      );
-
-      const usdcBalanceBefore = await usdc.balanceOf(sellerAddress);
-      const proceed = await controller.getProceed(sellerAddress, vaultId);
-      const proceedMinusFee = proceed.sub(proceed.mul(fee).div(10000));
-
-      await gammaOperator.connect(buyer).settle(sellerAddress, vaultId, fee);
-
-      const usdcBalanceAfter = await usdc.balanceOf(sellerAddress);
-
-      expect(usdcBalanceAfter).to.be.gt(usdcBalanceBefore);
-      const difference = usdcBalanceAfter.sub(usdcBalanceBefore);
-      expect(difference).to.be.eq(proceedMinusFee);
     });
   });
 
@@ -565,33 +458,6 @@ describe("GammaOperator", () => {
 
   describe("getRedeemPayout()", async () => {
     it("should return the same value as gamma controller", async () => {
-      // const strikePrice = parseUnits("175", STRIKE_PRICE_DECIMALS);
-      // const now = (await time.latest()).toNumber();
-      // const expiry = createValidExpiry(now, 1);
-
-      // const ethPut = await createOtoken(
-      //   otokenFactory,
-      //   WETH_ADDRESS,
-      //   USDC_ADDRESS,
-      //   USDC_ADDRESS,
-      //   parseUnits("200", STRIKE_PRICE_DECIMALS),
-      //   expiry,
-      //   true
-      // );
-
-      // await oracle.setExpiryPriceFinalizedAllPeiodOver(
-      //   WETH_ADDRESS,
-      //   expiry,
-      //   strikePrice,
-      //   true
-      // );
-      // await oracle.setExpiryPriceFinalizedAllPeiodOver(
-      //   USDC_ADDRESS,
-      //   expiry,
-      //   parseUnits("1", STRIKE_PRICE_DECIMALS),
-      //   true
-      // );
-
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
 
@@ -758,7 +624,66 @@ describe("GammaOperator", () => {
     });
   });
 
-  describe("getVaultOtoken()", async () => {
+  describe("getVault()", async () => {
+    it("should return the same value as Gamma controller", async () => {
+      const shortOptionAmount = parseUnits("1", OTOKEN_DECIMALS);
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ZERO_ADDR,
+          vaultId: vaultId.toString(),
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.DepositCollateral,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: USDC_ADDRESS,
+          vaultId: vaultId.toString(),
+          amount: collateralAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.MintShortOption,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ethPut.address,
+          vaultId: vaultId.toString(),
+          amount: shortOptionAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(seller).operate(actionArgs);
+
+      const vaultGamma = await controller.getVault(
+        sellerAddress,
+        vaultId.toString()
+      );
+      const vaultOperator = await gammaOperator.getVault(
+        sellerAddress,
+        vaultId.toString()
+      );
+      expect(vaultGamma[0][0]).to.be.eq(ethPut.address);
+      expect(vaultGamma[0][0]).to.be.eq(vaultOperator[0][0]);
+
+      expect(vaultGamma[2][0]).to.be.eq(USDC_ADDRESS);
+      expect(vaultGamma[2][0]).to.be.eq(vaultOperator[2][0]);
+      expect(vaultGamma[3][0]).to.be.eq(vaultOperator[3][0]);
+      expect(vaultGamma[5][0]).to.be.eq(vaultOperator[5][0]);
+    });
+  });
+
+  describe("getVaultOtokenByVault()", async () => {
     it("should revert if there is no long/short otokens in vault", async () => {
       const vault = {
         shortOtokens: [],
@@ -770,7 +695,7 @@ describe("GammaOperator", () => {
       };
 
       await expectRevert(
-        gammaOperator.getVaultOtoken(vault),
+        gammaOperator.getVaultOtokenByVault(vault),
         "reverted with panic code 0x1 (Assertion error)"
       );
     });
@@ -783,7 +708,7 @@ describe("GammaOperator", () => {
         longAmounts: [],
         collateralAmounts: [],
       };
-      expect(await gammaOperator.getVaultOtoken(shortVault)).to.be.eq(
+      expect(await gammaOperator.getVaultOtokenByVault(shortVault)).to.be.eq(
         WETH_ADDRESS
       );
 
@@ -795,7 +720,7 @@ describe("GammaOperator", () => {
         longAmounts: [],
         collateralAmounts: [],
       };
-      expect(await gammaOperator.getVaultOtoken(longVault)).to.be.eq(
+      expect(await gammaOperator.getVaultOtokenByVault(longVault)).to.be.eq(
         USDC_ADDRESS
       );
 
@@ -807,8 +732,70 @@ describe("GammaOperator", () => {
         longAmounts: [],
         collateralAmounts: [],
       };
-      expect(await gammaOperator.getVaultOtoken(longShortVault)).to.be.eq(
-        WETH_ADDRESS
+      expect(
+        await gammaOperator.getVaultOtokenByVault(longShortVault)
+      ).to.be.eq(WETH_ADDRESS);
+    });
+  });
+
+  describe("getVaultOtoken()", async () => {
+    it("should revert if there is no long/short otokens in vault", async () => {
+      await expectRevert(
+        gammaOperator.getVaultOtoken(deployerAddress, 999),
+        "reverted with panic code 0x1 (Assertion error)"
+      );
+    });
+    it("should return correct otoken", async () => {
+      const shortOptionAmount = parseUnits("1", OTOKEN_DECIMALS);
+
+      const vaultId = (
+        await controller.getAccountVaultCounter(sellerAddress)
+      ).add(1);
+      const actionArgs = [
+        {
+          actionType: ActionType.OpenVault,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ZERO_ADDR,
+          vaultId: vaultId.toString(),
+          amount: "0",
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.DepositCollateral,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: USDC_ADDRESS,
+          vaultId: vaultId.toString(),
+          amount: collateralAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+        {
+          actionType: ActionType.MintShortOption,
+          owner: sellerAddress,
+          secondAddress: sellerAddress,
+          asset: ethPut.address,
+          vaultId: vaultId.toString(),
+          amount: shortOptionAmount,
+          index: "0",
+          data: ZERO_ADDR,
+        },
+      ];
+      await controller.connect(seller).operate(actionArgs);
+
+      expect(
+        await gammaOperator.getVaultOtoken(sellerAddress, vaultId)
+      ).to.be.eq(ethPut.address);
+    });
+  });
+
+  describe("getOtokenCollateral()", async () => {
+    it("should return otoken collateral", async () => {
+      const collateral = await ethPut.collateralAsset();
+      expect(await gammaOperator.getOtokenCollateral(ethPut.address)).to.be.eq(
+        collateral
       );
     });
   });
@@ -969,23 +956,25 @@ describe("GammaOperator", () => {
 
   describe("refreshConfig()", async () => {
     it("should refresh config", async () => {
-      // TODO
-      // await gammaOperator.connect(deployer).setAddressBook(addressBook.address);
-      // const oldController = await gammaOperator.controller();
-      // const oldWhitelist = await gammaOperator.whitelist();
-      // const oldCalculator = await gammaOperator.calculator();
-      // const [newAddressBook, , newWhitelist, , , newCalculator, newController] =
-      //   await setupGammaContracts();
-      // expect(oldController).to.not.be.eq(newController.address);
-      // expect(oldWhitelist).to.not.be.eq(newWhitelist.address);
-      // expect(oldCalculator).to.not.be.eq(newCalculator.address);
-      // await gammaOperator
-      //   .connect(deployer)
-      //   .setAddressBook(newAddressBook.address);
-      // await gammaOperator.refreshConfig();
-      // expect(await gammaOperator.controller()).to.be.eq(newController.address);
-      // expect(await gammaOperator.whitelist()).to.be.eq(newWhitelist.address);
-      // expect(await gammaOperator.calculator()).to.be.eq(newCalculator.address);
+      const ownerAddress = await addressBook.owner();
+      const owner = await impersonateAccount(ownerAddress);
+
+      const [funder] = await ethers.getSigners();
+      await funder.sendTransaction({
+        to: ownerAddress,
+        value: parseEther("1"),
+      });
+
+      await addressBook.connect(owner).setWhitelist(deployerAddress);
+      await addressBook.connect(owner).setMarginCalculator(deployerAddress);
+
+      expect(await gammaOperator.whitelist()).to.not.be.eq(deployerAddress);
+      expect(await gammaOperator.calculator()).to.not.be.eq(deployerAddress);
+
+      await gammaOperator.refreshConfig();
+
+      expect(await gammaOperator.whitelist()).to.be.eq(deployerAddress);
+      expect(await gammaOperator.calculator()).to.be.eq(deployerAddress);
     });
   });
 

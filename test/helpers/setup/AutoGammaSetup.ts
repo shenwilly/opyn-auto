@@ -1,35 +1,43 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { ethers } from "hardhat";
-import { ADDRESS_BOOK_ADDRESS } from "../../../constants/address";
 import {
-  GammaRedeemerResolver,
-  GammaRedeemerResolver__factory,
-  GammaRedeemerV1,
-  GammaRedeemerV1__factory,
+  ADDRESS_BOOK_ADDRESS,
+  UNISWAP_V2_ROUTER_02,
+} from "../../../constants/address";
+import {
+  AutoGammaResolver,
+  AutoGammaResolver__factory,
+  AutoGamma,
+  AutoGamma__factory,
 } from "../../../typechain";
 
-type AutoGammaContracts = [GammaRedeemerV1, GammaRedeemerResolver];
+type AutoGammaContracts = [AutoGamma, AutoGammaResolver];
 
 export const setupAutoGammaContracts = async (
   signer: SignerWithAddress,
+  uniRouter: string,
   automator: string,
   treasury: string
 ): Promise<AutoGammaContracts> => {
-  const GammaRedeemerFactory = (await ethers.getContractFactory(
-    "GammaRedeemerV1",
+  const AutoGammaFactory = (await ethers.getContractFactory(
+    "AutoGamma",
     signer
-  )) as GammaRedeemerV1__factory;
-  const gammaRedeemer = await GammaRedeemerFactory.deploy(
+  )) as AutoGamma__factory;
+  const autoGamma = await AutoGammaFactory.deploy(
     ADDRESS_BOOK_ADDRESS,
+    uniRouter,
     automator,
     treasury
   );
 
   const ResolverFactory = (await ethers.getContractFactory(
-    "GammaRedeemerResolver",
+    "AutoGammaResolver",
     signer
-  )) as GammaRedeemerResolver__factory;
-  const resolver = await ResolverFactory.deploy(gammaRedeemer.address);
+  )) as AutoGammaResolver__factory;
+  const resolver = await ResolverFactory.deploy(
+    autoGamma.address,
+    UNISWAP_V2_ROUTER_02
+  );
 
-  return [gammaRedeemer, resolver];
+  return [autoGamma, resolver];
 };
