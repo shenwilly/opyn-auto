@@ -44,7 +44,7 @@ const { expect } = chai;
 const OTOKEN_ADDRESS = "0xd585cce0bfaedae7797babe599c38d7c157e1e43";
 const WBTC_ADDRESS = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599";
 
-describe("Scenario: Auto Redeem", () => {
+describe("Scenario: Auto Redeem To Token", () => {
   let deployer: SignerWithAddress;
 
   let buyer: SignerWithAddress;
@@ -69,6 +69,7 @@ describe("Scenario: Auto Redeem", () => {
 
   const strikePrice = "2000";
   let expiry: number;
+  let snapshotId: string;
 
   before("setup contracts", async () => {
     [deployer, buyer, seller] = await ethers.getSigners();
@@ -142,9 +143,164 @@ describe("Scenario: Auto Redeem", () => {
       .depositFunds(autoGamma.address, ETH_TOKEN_ADDRESS, 0, {
         value: parseEther("0.1"),
       });
+
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
+  });
+
+  beforeEach(async () => {
+    await ethers.provider.send("evm_revert", [snapshotId]);
+    snapshotId = await ethers.provider.send("evm_snapshot", []);
   });
 
   describe("auto redeem", async () => {
+    let buyerOrderId: BigNumber;
+    let buyerOrderId2: BigNumber;
+    let sellerOrderId: BigNumber;
+    let vaultId: BigNumber;
+
+    beforeEach(async () => {
+      expiry = (await ethPut.expiryTimestamp()).toNumber();
+      await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
+      await ethers.provider.send("evm_mine", []);
+
+      await setExpiryPriceAndEndDisputePeriod(
+        oracle,
+        WETH_ADDRESS,
+        expiry,
+        parseUnits(strikePrice, STRIKE_PRICE_DECIMALS)
+      );
+
+      buyerOrderId = await autoGamma.getOrdersLength();
+      await autoGamma
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits("1", OTOKEN_DECIMALS),
+          0,
+          ZERO_ADDR
+        );
+      buyerOrderId2 = await autoGamma.getOrdersLength();
+      await autoGamma
+        .connect(buyer)
+        .createOrder(
+          ethPut.address,
+          parseUnits("1", OTOKEN_DECIMALS),
+          0,
+          ZERO_ADDR
+        );
+
+      sellerOrderId = await autoGamma.getOrdersLength();
+      vaultId = await controller.getAccountVaultCounter(sellerAddress);
+      await autoGamma
+        .connect(seller)
+        .createOrder(ZERO_ADDR, 0, vaultId, ZERO_ADDR);
+    });
+
+    it("should redeem otoken & settle vault", async () => {
+      const buyerPayout = await controller.getPayout(
+        ethPut.address,
+        parseUnits("2", OTOKEN_DECIMALS)
+      );
+      const sellerProceed = await controller.getProceed(sellerAddress, vaultId);
+
+      const contractBalanceBefore = await usdc.balanceOf(autoGamma.address);
+      const buyerBalanceBefore = await usdc.balanceOf(buyerAddress);
+      const sellerBalanceBefore = await usdc.balanceOf(sellerAddress);
+
+      expect(await autoGamma.shouldProcessOrder(buyerOrderId)).to.be.eq(true);
+      expect(await autoGamma.shouldProcessOrder(sellerOrderId)).to.be.eq(true);
+
+      const [canExec, execPayload] = await resolver.getProcessableOrders();
+      expect(canExec).to.be.eq(true);
+      const taskData = autoGamma.interface.encodeFunctionData("processOrders", [
+        [buyerOrderId, sellerOrderId],
+        [
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+          {
+            swapAmountOutMin: 0,
+            swapPath: [],
+          },
+        ],
+      ]);
+      expect(execPayload).to.be.eq(taskData);
+
+      const gelato = await automator.gelato();
+      await hre.network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [gelato],
+      });
+      const gelatoSigner = await ethers.getSigner(gelato);
+      await automator
+        .connect(gelatoSigner)
+        .exec(
+          parseEther("0.02"),
+          ETH_TOKEN_ADDRESS,
+          autoGamma.address,
+          autoGamma.address,
+          taskData
+        );
+
+      const [canExecSecond, execPayloadSecond] =
+        await resolver.getProcessableOrders();
+      expect(canExecSecond).to.be.eq(true);
+      const taskDataSecond = autoGamma.interface.encodeFunctionData(
+        "processOrders",
+        [
+          [buyerOrderId2],
+          [
+            {
+              swapAmountOutMin: 0,
+              swapPath: [],
+            },
+          ],
+        ]
+      );
+      expect(execPayloadSecond).to.be.eq(taskDataSecond);
+
+      await automator
+        .connect(gelatoSigner)
+        .exec(
+          parseEther("0.01"),
+          ETH_TOKEN_ADDRESS,
+          autoGamma.address,
+          autoGamma.address,
+          taskDataSecond
+        );
+
+      const [canExecFinish, execPayloadFinish] =
+        await resolver.getProcessableOrders();
+      expect(canExecFinish).to.be.eq(false);
+      const taskDataFinish = autoGamma.interface.encodeFunctionData(
+        "processOrders",
+        [[], []]
+      );
+      expect(execPayloadFinish).to.be.eq(taskDataFinish);
+
+      const contractBalanceAfter = await usdc.balanceOf(autoGamma.address);
+      const buyerBalanceAfter = await usdc.balanceOf(buyerAddress);
+      const sellerBalanceAfter = await usdc.balanceOf(sellerAddress);
+
+      const buyerDifference = buyerBalanceAfter.sub(buyerBalanceBefore);
+      const buyerFee = await autoGamma.redeemFee();
+      const buyerFeeTotal = buyerFee.mul(buyerPayout).div(10000);
+      expect(buyerDifference).to.be.eq(buyerPayout.sub(buyerFeeTotal));
+
+      const sellerDifference = sellerBalanceAfter.sub(sellerBalanceBefore);
+      const sellerFee = await autoGamma.settleFee();
+      const sellerFeeTotal = sellerFee.mul(sellerProceed).div(10000);
+      expect(sellerDifference).to.be.eq(sellerProceed.sub(sellerFeeTotal));
+
+      const contractDifference = contractBalanceAfter.sub(
+        contractBalanceBefore
+      );
+      expect(contractDifference).to.be.eq(buyerFeeTotal.add(sellerFeeTotal));
+    });
+  });
+
+  describe("auto redeem to token", async () => {
     let buyerOrderId1: BigNumber;
     let buyerOrderId2: BigNumber;
     let sellerOrderId: BigNumber;
@@ -153,7 +309,7 @@ describe("Scenario: Auto Redeem", () => {
     let buyerOrderIdAmount = parseUnits("1", OTOKEN_DECIMALS);
     let buyerOrderId2Amount = parseUnits("1", OTOKEN_DECIMALS);
 
-    before(async () => {
+    beforeEach(async () => {
       expiry = (await ethPut.expiryTimestamp()).toNumber();
       await ethers.provider.send("evm_setNextBlockTimestamp", [expiry]);
       await ethers.provider.send("evm_mine", []);
